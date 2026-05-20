@@ -1,0 +1,113 @@
+@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Patrick Hand", cursive;
+  background-color: #ece9e1;
+  color: #3b2b23;
+}
+
+.board {
+  min-height: 100vh;
+  padding: 45px 55px;
+  border-radius: 35px;
+  background-color: #f3f0ea;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 40px;
+}
+
+.top-bar h1 {
+  margin: 0;
+  font-size: 52px;
+  font-weight: 400;
+  text-shadow: 2px 3px 4px rgba(0,0,0,0.25);
+}
+
+.back,
+.settings {
+  font-size: 48px;
+}
+
+.lists-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 45px;
+}
+
+.list {
+  width: 215px;
+  padding: 16px 20px;
+  border-radius: 14px;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+}
+
+.todo {
+  background-color: #b8a4cc;
+}
+
+.doing {
+  background-color: #8fa99d;
+}
+
+.done {
+  background-color: #a7b99a;
+}
+
+.list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.list-header h2 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 400;
+}
+
+.list-header span {
+  font-size: 24px;
+  color: #111;
+}
+
+.card {
+  background-color: #f0eee8;
+  border: 3px solid #c4d9bd;
+  border-radius: 18px;
+  padding: 14px 20px;
+  margin-bottom: 12px;
+  min-height: 82px;
+}
+
+.card p {
+  margin: 0 0 10px;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.date {
+  font-size: 15px;
+  color: #625c57;
+}
+
+.add-list {
+  width: 215px;
+  height: 62px;
+  background-color: #eee8dd;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  box-shadow: 0 5px 12px rgba(0,0,0,0.18);
+}
