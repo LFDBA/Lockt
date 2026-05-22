@@ -1,5 +1,6 @@
 const cardContainers = document.querySelectorAll(".list-cards");
 const cards = document.querySelectorAll(".card");
+const addListButton = document.querySelector(".add-list");
 
 let draggedCard = null;
 
@@ -69,3 +70,14 @@ function getCardAfterPointer(container, pointerY) {
     { offset: Number.NEGATIVE_INFINITY, element: null }
   ).element;
 }
+
+addListButton.addEventListener("click", () => {
+  alert("Add List button clicked!");
+  const newList = document.createElement("div");
+  newList.classList.add("list-cards");
+  newList.innerHTML = `
+    <h3>List Title</h3>
+    <div class="cards-container"></div>
+  `;
+  document.querySelector(".lists-row").appendChild(newList);
+});
