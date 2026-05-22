@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Indie+Flower&display=swap');
 
 * {
   box-sizing: border-box;
@@ -6,9 +6,10 @@
 
 body {
   margin: 0;
-  font-family: "Patrick Hand", cursive;
+  font-family: "Indie Flower", cursive;
   background-color: #ece9e1;
   color: #3b2b23;
+  overflow-x: auto;
 }
 
 .board {
@@ -16,6 +17,7 @@ body {
   padding: 45px 55px;
   border-radius: 35px;
   background-color: #f3f0ea;
+  min-width: max-content;
 }
 
 .top-bar {
@@ -41,13 +43,19 @@ body {
   display: flex;
   align-items: flex-start;
   gap: 45px;
+  width: max-content;
 }
 
 .list {
   width: 215px;
+  flex: 0 0 215px;
   padding: 16px 20px;
   border-radius: 14px;
   box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+}
+
+.list-cards {
+  min-height: 20px;
 }
 
 .todo {
@@ -87,6 +95,8 @@ body {
   padding: 14px 20px;
   margin-bottom: 12px;
   min-height: 82px;
+  cursor: grab;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, opacity 0.14s ease;
 }
 
 .card p {
@@ -102,6 +112,7 @@ body {
 
 .add-list {
   width: 215px;
+  flex: 0 0 215px;
   height: 62px;
   background-color: #eee8dd;
   border-radius: 14px;
@@ -110,4 +121,20 @@ body {
   justify-content: center;
   font-size: 28px;
   box-shadow: 0 5px 12px rgba(0,0,0,0.18);
+}
+
+.card:last-child {
+  margin-bottom: 0;
+}
+
+.card.dragging {
+  opacity: 0.35;
+  transform: rotate(2deg);
+  cursor: grabbing;
+}
+
+.list-cards.drag-over {
+  outline: 3px dashed rgba(59, 43, 35, 0.35);
+  outline-offset: 10px;
+  border-radius: 18px;
 }
