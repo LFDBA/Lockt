@@ -113,7 +113,7 @@ function setupTrash(container) {
 
         setTimeout(() => {
             alertBox.classList.remove("show");
-        }, 1000);
+        }, 5000);
     });
 }
 
