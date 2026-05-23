@@ -1,36 +1,37 @@
-const cardContainers = document.querySelectorAll(".list-cards");
-const cards = document.querySelectorAll(".card");
 const addListButton = document.querySelector(".add-list");
-const lists = document.querySelectorAll(".list");
 const template = document.querySelector("#list-template");
 const listsRow = document.querySelector(".lists-row");
-
+const trash = document.querySelector("#trash");
+const alertBox = document.querySelector("#alert");
 
 let draggedCard = null;
+let draggedFromList = null;
+let deletedCards = [];
 
-document.addEventListener('keydown', (event) => {
-  // Check for Ctrl (Windows/Linux) or Cmd (Mac) along with the 'z' key
-  if ((event.ctrlKey || event.metaKey) && event.key === 'z') {
-    event.preventDefault(); // Prevents the browser's default undo behavior
-    
-    console.log('Ctrl+Z was pressed!');
-    // Call your custom function here
-  }
+document.addEventListener("keydown", (event) => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+
+        const lastDeleted = deletedCards.pop();
+
+        if (!lastDeleted) return;
+
+        lastDeleted.list.appendChild(lastDeleted.card);
+    }
 });
-
 
 function setupCard(card) {
     card.draggable = true;
 
     card.addEventListener("dragstart", (event) => {
         draggedCard = card;
+        draggedFromList = card.parentElement;
         card.classList.add("dragging");
 
         const dragImage = card.cloneNode(true);
         dragImage.classList.add("drag-preview");
 
         document.body.appendChild(dragImage);
-
         event.dataTransfer.setDragImage(dragImage, 100, 40);
 
         setTimeout(() => {
@@ -41,10 +42,13 @@ function setupCard(card) {
     card.addEventListener("dragend", () => {
         card.classList.remove("dragging");
         draggedCard = null;
+        draggedFromList = null;
 
         document.querySelectorAll(".list-cards").forEach((container) => {
             container.classList.remove("drag-over");
         });
+
+        trash.classList.remove("drag-over");
     });
 }
 
@@ -94,25 +98,24 @@ function setupTrash(container) {
 
     container.addEventListener("drop", (event) => {
         event.preventDefault();
-        document.querySelector("#alert").classList.add("show");
-        container.classList.remove("drag-over");
-        draggedCard.remove();
-        setTimeout(() => {
-            document.querySelector("#alert").classList.remove("show");
-        }, 1000);
 
+        if (!draggedCard || !draggedFromList) return;
+
+        deletedCards.push({
+            card: draggedCard,
+            list: draggedFromList
+        });
+
+        draggedCard.remove();
+
+        container.classList.remove("drag-over");
+        alertBox.classList.add("show");
+
+        setTimeout(() => {
+            alertBox.classList.remove("show");
+        }, 1000);
     });
 }
-
-document.querySelectorAll(".card").forEach(setupCard);
-document.querySelectorAll(".list-cards").forEach(setupContainer);
-setupTrash(document.querySelector("#trash"));
-document.querySelector("#trash").addEventListener("dragover", (event) => {
-    event.preventDefault();
-});
-document.querySelector("#trash").addEventListener("drop", (event) => {
-    event.preventDefault();
-});
 
 function getCardAfterPointer(container, pointerY) {
     const otherCards = [...container.querySelectorAll(".card:not(.dragging)")];
@@ -132,7 +135,6 @@ function getCardAfterPointer(container, pointerY) {
     ).element;
 }
 
-
 function createList(name) {
     const clone = template.content.cloneNode(true);
     const list = clone.querySelector(".list");
@@ -147,6 +149,10 @@ function createList(name) {
 
     listsRow.insertBefore(clone, addListButton);
 }
+
+document.querySelectorAll(".card").forEach(setupCard);
+document.querySelectorAll(".list-cards").forEach(setupContainer);
+setupTrash(trash);
 
 addListButton.addEventListener("click", () => {
     createList("Ideas");
