@@ -55,8 +55,39 @@ function setupContainer(container) {
     });
 }
 
+function setupTrash(container) {
+    container.addEventListener("dragover", (event) => {
+        event.preventDefault();
+
+        if (!draggedCard) return;
+
+        container.classList.add("drag-over");
+    });
+
+    container.addEventListener("dragleave", (event) => {
+        if (!container.contains(event.relatedTarget)) {
+            container.classList.remove("drag-over");
+        }
+    });
+
+    container.addEventListener("drop", (event) => {
+        event.preventDefault();
+        console.log("Dropped in trash");
+        container.classList.remove("drag-over");
+        draggedCard.remove();
+        
+    });
+}
+
 document.querySelectorAll(".card").forEach(setupCard);
 document.querySelectorAll(".list-cards").forEach(setupContainer);
+setupTrash(document.querySelector("#trash"));
+document.querySelector("#trash").addEventListener("dragover", (event) => {
+    event.preventDefault();
+});
+document.querySelector("#trash").addEventListener("drop", (event) => {
+    event.preventDefault();
+});
 
 function getCardAfterPointer(container, pointerY) {
     const otherCards = [...container.querySelectorAll(".card:not(.dragging)")];

@@ -163,4 +163,25 @@ body {
   color: #3b2b23;
   background-color: #ece9e1;
   box-shadow: 0 5px 12px rgba(0,0,0,0.25);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
+}
+
+#trash.drag-over {
+  background-color: #f28b824f;
+  color: #fff;
+  box-shadow: 0 8px 15px rgba(0,0,0,0.25);
+  transform: scale(1.1);
+}
+
+#alert {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #f28b82;
+  color: #fff;
+  padding: 12px 24px;
+  border-radius: 8px;
+  box-shadow: 0 5px 12px rgba(0,0,0,0.25);
+  font-size: 16px;
 }
