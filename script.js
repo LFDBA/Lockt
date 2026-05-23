@@ -8,12 +8,34 @@ const listsRow = document.querySelector(".lists-row");
 
 let draggedCard = null;
 
+document.addEventListener('keydown', (event) => {
+  // Check for Ctrl (Windows/Linux) or Cmd (Mac) along with the 'z' key
+  if ((event.ctrlKey || event.metaKey) && event.key === 'z') {
+    event.preventDefault(); // Prevents the browser's default undo behavior
+    
+    console.log('Ctrl+Z was pressed!');
+    // Call your custom function here
+  }
+});
+
+
 function setupCard(card) {
     card.draggable = true;
 
-    card.addEventListener("dragstart", () => {
+    card.addEventListener("dragstart", (event) => {
         draggedCard = card;
         card.classList.add("dragging");
+
+        const dragImage = card.cloneNode(true);
+        dragImage.classList.add("drag-preview");
+
+        document.body.appendChild(dragImage);
+
+        event.dataTransfer.setDragImage(dragImage, 100, 40);
+
+        setTimeout(() => {
+            dragImage.remove();
+        }, 0);
     });
 
     card.addEventListener("dragend", () => {
@@ -72,10 +94,13 @@ function setupTrash(container) {
 
     container.addEventListener("drop", (event) => {
         event.preventDefault();
-        console.log("Dropped in trash");
+        document.querySelector("#alert").classList.add("show");
         container.classList.remove("drag-over");
         draggedCard.remove();
-        
+        setTimeout(() => {
+            document.querySelector("#alert").classList.remove("show");
+        }, 1000);
+
     });
 }
 
