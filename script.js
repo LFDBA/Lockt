@@ -8,7 +8,7 @@ const listsRow = document.querySelector(".lists-row");
 
 let draggedCard = null;
 
-cards.forEach((card) => {
+function setupCard(card) {
     card.draggable = true;
 
     card.addEventListener("dragstart", () => {
@@ -20,19 +20,17 @@ cards.forEach((card) => {
         card.classList.remove("dragging");
         draggedCard = null;
 
-        cardContainers.forEach((container) => {
+        document.querySelectorAll(".list-cards").forEach((container) => {
             container.classList.remove("drag-over");
         });
     });
-});
+}
 
-cardContainers.forEach((container) => {
+function setupContainer(container) {
     container.addEventListener("dragover", (event) => {
         event.preventDefault();
 
-        if (!draggedCard) {
-            return;
-        }
+        if (!draggedCard) return;
 
         container.classList.add("drag-over");
 
@@ -55,7 +53,10 @@ cardContainers.forEach((container) => {
         event.preventDefault();
         container.classList.remove("drag-over");
     });
-});
+}
+
+document.querySelectorAll(".card").forEach(setupCard);
+document.querySelectorAll(".list-cards").forEach(setupContainer);
 
 function getCardAfterPointer(container, pointerY) {
     const otherCards = [...container.querySelectorAll(".card:not(.dragging)")];
@@ -79,14 +80,17 @@ function getCardAfterPointer(container, pointerY) {
 function createList(name) {
     const clone = template.content.cloneNode(true);
     const list = clone.querySelector(".list");
+    const container = clone.querySelector(".list-cards");
+
     list.style.backgroundColor = "#c9a3a3";
     list.classList.add(name.toLowerCase());
     list.querySelector("h2").textContent = name;
 
-    listsRow.insertBefore(clone, document.querySelector(".add-list"));
-    const lists = document.querySelectorAll(".list");
-}
+    clone.querySelectorAll(".card").forEach(setupCard);
+    setupContainer(container);
 
+    listsRow.insertBefore(clone, addListButton);
+}
 
 addListButton.addEventListener("click", () => {
     createList("Ideas");
