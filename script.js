@@ -8,6 +8,22 @@ let draggedCard = null;
 let draggedFromList = null;
 let deletedCards = [];
 
+const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
+let lastListColour = null;
+
+function getRandomListColour() {
+    const availableColours = colours.filter((colour) => {
+        return colour !== lastListColour;
+    });
+
+    const randomColour = availableColours[
+        Math.floor(Math.random() * availableColours.length)
+    ];
+
+    lastListColour = randomColour;
+    return randomColour;
+}
+
 document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
@@ -49,6 +65,13 @@ function setupCard(card) {
         });
 
         trash.classList.remove("drag-over");
+    });
+}
+
+function setupCardOptions(options) {
+    options.addEventListener("click", (event) => {
+        event.stopPropagation();
+        console.log("Card options clicked");
     });
 }
 
@@ -139,24 +162,26 @@ function createList() {
     const clone = template.content.cloneNode(true);
     const list = clone.querySelector(".list");
     const container = clone.querySelector(".list-cards");
+    const titleInput = clone.querySelector(".list-title");
 
-    list.style.backgroundColor = "#c9a3a3";
-    const titleInput = list.querySelector(".list-title");
+    list.style.backgroundColor = getRandomListColour();
 
     titleInput.value = "";
     titleInput.placeholder = "New List";
 
-    requestAnimationFrame(() => {
-        titleInput.focus();
-    });
-
     clone.querySelectorAll(".card").forEach(setupCard);
+    clone.querySelectorAll(".card-options").forEach(setupCardOptions);
     setupContainer(container);
 
     listsRow.insertBefore(clone, addListButton);
+
+    requestAnimationFrame(() => {
+        titleInput.focus();
+    });
 }
 
 document.querySelectorAll(".card").forEach(setupCard);
+document.querySelectorAll(".card-options").forEach(setupCardOptions);
 document.querySelectorAll(".list-cards").forEach(setupContainer);
 setupTrash(trash);
 
