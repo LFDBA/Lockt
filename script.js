@@ -135,14 +135,20 @@ function getCardAfterPointer(container, pointerY) {
     ).element;
 }
 
-function createList(name) {
+function createList() {
     const clone = template.content.cloneNode(true);
     const list = clone.querySelector(".list");
     const container = clone.querySelector(".list-cards");
 
     list.style.backgroundColor = "#c9a3a3";
-    list.classList.add(name.toLowerCase());
-    list.querySelector("h2").textContent = name;
+    const titleInput = list.querySelector(".list-title");
+
+    titleInput.value = "";
+    titleInput.placeholder = "New List";
+
+    requestAnimationFrame(() => {
+        titleInput.focus();
+    });
 
     clone.querySelectorAll(".card").forEach(setupCard);
     setupContainer(container);
@@ -155,5 +161,5 @@ document.querySelectorAll(".list-cards").forEach(setupContainer);
 setupTrash(trash);
 
 addListButton.addEventListener("click", () => {
-    createList("Ideas");
+    createList();
 });
