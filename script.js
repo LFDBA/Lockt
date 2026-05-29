@@ -6,7 +6,7 @@ const alertBox = document.querySelector("#alert");
 
 let draggedCard = null;
 let draggedFromList = null;
-let deletedCards = [];
+let actionHistory = [];
 let activeCardDrag = null;
 let activeListDrag = null;
 let pendingListDrag = null;
@@ -54,6 +54,26 @@ function getListAfterPointer(pointerX) {
     ).element;
 }
 
+function recordAction(action) {
+    actionHistory.push(action);
+}
+
+function insertNodeAt(parent, node, nextSibling = null) {
+    if (!parent || !node) return;
+
+    if (nextSibling && nextSibling.parentElement === parent) {
+        parent.insertBefore(node, nextSibling);
+        return;
+    }
+
+    if (parent === listsRow && addListButton.parentElement === parent) {
+        parent.insertBefore(node, addListButton);
+        return;
+    }
+
+    parent.appendChild(node);
+}
+
 function clearDragHighlights() {
     document.querySelectorAll(".list-cards").forEach((container) => {
         container.classList.remove("drag-over");
@@ -68,6 +88,7 @@ function stopListPointerTracking() {
     window.removeEventListener("pointercancel", handleListPointerCancel);
 
     document.body.classList.remove("list-drag-active");
+    clearDragHighlights();
 }
 
 function stopPendingListPointerTracking() {
@@ -229,6 +250,15 @@ function handleListPointerMove(event) {
     if (!activeListDrag) return;
 
     updateListPreviewPosition(event.clientX, event.clientY);
+    clearDragHighlights();
+
+    const { overTrash } = getPointerDropTarget(event.clientX, event.clientY);
+
+    if (overTrash) {
+        trash.classList.add("drag-over");
+        return;
+    }
+
     moveListPlaceholderToPointer(event.clientX);
 }
 
@@ -371,9 +401,11 @@ function finishCardDrop({ deleteCard = false } = {}) {
     resetCardDragState();
 
     if (deleteCard) {
-        deletedCards.push({
+        recordAction({
+            type: "card-delete",
             card,
-            list: sourceList
+            parent: placeholder.parentElement || sourceList,
+            nextSibling: placeholder.nextElementSibling
         });
 
         placeholder.remove();
@@ -399,11 +431,27 @@ function finishCardDrop({ deleteCard = false } = {}) {
     }, DROP_ANIMATION_MS);
 }
 
-function finishListDrop() {
+function finishListDrop({ deleteList = false } = {}) {
     if (!activeListDrag) return;
 
     const listDrag = activeListDrag;
     const { list, placeholder, preview } = listDrag;
+
+    if (deleteList) {
+        recordAction({
+            type: "list-delete",
+            list,
+            parent: placeholder.parentElement || listsRow,
+            nextSibling: placeholder.nextElementSibling
+        });
+
+        placeholder.remove();
+        preview.remove();
+        stopListPointerTracking();
+        resetListDragState();
+        showDeleteAlert();
+        return;
+    }
 
     preview.remove();
     placeholder.replaceWith(list);
@@ -418,10 +466,12 @@ function handleCardPointerUp(event) {
     finishCardDrop({ deleteCard: overTrash });
 }
 
-function handleListPointerUp() {
+function handleListPointerUp(event) {
     if (!activeListDrag) return;
 
-    finishListDrop();
+    const { overTrash } = getPointerDropTarget(event.clientX, event.clientY);
+
+    finishListDrop({ deleteList: overTrash });
 }
 
 function handleCardPointerCancel() {
@@ -616,11 +666,31 @@ document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
 
-        const lastDeleted = deletedCards.pop();
+        const lastAction = actionHistory.pop();
 
-        if (!lastDeleted) return;
+        if (!lastAction) return;
 
-        lastDeleted.list.appendChild(lastDeleted.card);
+        if (lastAction.type === "card-delete") {
+            insertNodeAt(
+                lastAction.parent,
+                lastAction.card,
+                lastAction.nextSibling
+            );
+            return;
+        }
+
+        if (lastAction.type === "list-delete") {
+            insertNodeAt(
+                lastAction.parent,
+                lastAction.list,
+                lastAction.nextSibling
+            );
+            return;
+        }
+
+        if (lastAction.type === "list-add" && lastAction.list.isConnected) {
+            lastAction.list.remove();
+        }
     }
 });
 
@@ -792,9 +862,11 @@ function setupTrash(container) {
 
         if (!draggedCard || !draggedFromList) return;
 
-        deletedCards.push({
+        recordAction({
+            type: "card-delete",
             card: draggedCard,
-            list: draggedFromList
+            parent: draggedFromList,
+            nextSibling: null
         });
 
         draggedCard.remove();
@@ -843,6 +915,10 @@ function createList() {
     setupList(list);
 
     listsRow.insertBefore(clone, addListButton);
+    recordAction({
+        type: "list-add",
+        list
+    });
 
     requestAnimationFrame(() => {
         titleInput.focus();
