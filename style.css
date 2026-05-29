@@ -56,6 +56,7 @@ body {
   padding: 16px 20px 0px;
   border-radius: 14px;
   box-shadow: 0 6px 12px rgba(0,0,0,0.25);
+  cursor: grab;
 }
 
 .list-cards {
@@ -90,6 +91,10 @@ body {
 .list-header span {
   font-size: 24px;
   color: #111;
+}
+
+.list:active {
+  cursor: grabbing;
 }
 
 .card {
@@ -277,6 +282,43 @@ body {
   margin-bottom: 0;
 }
 
+.list-preview {
+  position: fixed;
+  top: 0;
+  left: 0;
+  margin: 0;
+  box-sizing: border-box;
+  max-width: none;
+  pointer-events: none;
+  cursor: grabbing;
+  z-index: 950;
+  opacity: 0.98;
+  transform: rotate(0deg);
+  box-shadow: 0 14px 24px rgba(0,0,0,0.18);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+
+.list-preview.is-tilted {
+  transform: rotate(1.5deg);
+  box-shadow: 0 18px 30px rgba(0,0,0,0.24);
+}
+
+.list-placeholder {
+  opacity: 0.4;
+  border: 2px dashed rgba(98, 92, 87, 0.4);
+  box-shadow: none;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
+}
+
+.list-placeholder .card-options {
+  display: none;
+}
+
+.list-placeholder .add-card {
+  opacity: 0.7;
+}
+
 .card-preview {
   position: fixed;
   top: 0;
@@ -331,7 +373,8 @@ body {
   animation: card-drop-settle 0.18s ease;
 }
 
-.card-drag-active {
+.card-drag-active,
+.list-drag-active {
   user-select: none;
 }
 
@@ -359,6 +402,8 @@ body {
   width: 100%;
   border: none;
   background: transparent;
+  cursor: text;
+  touch-action: auto;
 
   font-family: inherit;
   font-size: 28px;

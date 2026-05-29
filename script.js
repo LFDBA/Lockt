@@ -8,10 +8,13 @@ let draggedCard = null;
 let draggedFromList = null;
 let deletedCards = [];
 let activeCardDrag = null;
+let activeListDrag = null;
+let pendingListDrag = null;
 
 const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
 let lastListColour = null;
 const DROP_ANIMATION_MS = 180;
+const LIST_DRAG_THRESHOLD = 6;
 const EMPTY_CARD_DATE_LABEL = "No due date";
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -31,12 +34,76 @@ function getRandomListColour() {
     return randomColour;
 }
 
+function getListAfterPointer(pointerX) {
+    const otherLists = [
+        ...listsRow.querySelectorAll(".list:not(.list-placeholder)")
+    ];
+
+    return otherLists.reduce(
+        (closest, list) => {
+            const bounds = list.getBoundingClientRect();
+            const offset = pointerX - bounds.left - bounds.width / 2;
+
+            if (offset < 0 && offset > closest.offset) {
+                return { offset, element: list };
+            }
+
+            return closest;
+        },
+        { offset: Number.NEGATIVE_INFINITY, element: null }
+    ).element;
+}
+
 function clearDragHighlights() {
     document.querySelectorAll(".list-cards").forEach((container) => {
         container.classList.remove("drag-over");
     });
 
     trash.classList.remove("drag-over");
+}
+
+function stopListPointerTracking() {
+    window.removeEventListener("pointermove", handleListPointerMove);
+    window.removeEventListener("pointerup", handleListPointerUp);
+    window.removeEventListener("pointercancel", handleListPointerCancel);
+
+    document.body.classList.remove("list-drag-active");
+}
+
+function stopPendingListPointerTracking() {
+    window.removeEventListener("pointermove", handlePendingListPointerMove);
+    window.removeEventListener("pointerup", handlePendingListPointerUp);
+    window.removeEventListener("pointercancel", handlePendingListPointerCancel);
+}
+
+function resetListDragState() {
+    activeListDrag = null;
+}
+
+function resetPendingListDragState() {
+    pendingListDrag = null;
+}
+
+function clearListDrag({ restore = true } = {}) {
+    if (!activeListDrag) return;
+
+    const { list, placeholder, preview } = activeListDrag;
+
+    preview.remove();
+
+    if (restore && placeholder.isConnected) {
+        placeholder.replaceWith(list);
+    }
+
+    stopListPointerTracking();
+    resetListDragState();
+}
+
+function clearPendingListDrag() {
+    if (!pendingListDrag) return;
+
+    stopPendingListPointerTracking();
+    resetPendingListDragState();
 }
 
 function stopCardPointerTracking() {
@@ -134,6 +201,116 @@ function handleCardPointerMove(event) {
     );
 }
 
+function updateListPreviewPosition(clientX, clientY) {
+    if (!activeListDrag) return;
+
+    activeListDrag.preview.style.left = `${
+        clientX - activeListDrag.pointerOffsetX
+    }px`;
+    activeListDrag.preview.style.top = `${
+        clientY - activeListDrag.pointerOffsetY
+    }px`;
+}
+
+function moveListPlaceholderToPointer(pointerX) {
+    if (!activeListDrag) return;
+
+    const nextList = getListAfterPointer(pointerX);
+
+    if (nextList) {
+        listsRow.insertBefore(activeListDrag.placeholder, nextList);
+        return;
+    }
+
+    listsRow.insertBefore(activeListDrag.placeholder, addListButton);
+}
+
+function handleListPointerMove(event) {
+    if (!activeListDrag) return;
+
+    updateListPreviewPosition(event.clientX, event.clientY);
+    moveListPlaceholderToPointer(event.clientX);
+}
+
+function beginListDrag(listDrag, clientX, clientY) {
+    const { list, pointerOffsetX, pointerOffsetY } = listDrag;
+    const bounds = list.getBoundingClientRect();
+    const preview = list.cloneNode(true);
+    const placeholder = list.cloneNode(true);
+
+    resetListCloneState(preview);
+    resetListCloneState(placeholder);
+
+    preview.classList.add("list-preview");
+    preview.style.width = `${bounds.width}px`;
+    preview.style.height = `${bounds.height}px`;
+    preview.style.minHeight = `${bounds.height}px`;
+    preview.style.transformOrigin = `${pointerOffsetX}px ${pointerOffsetY}px`;
+
+    placeholder.classList.add("list-placeholder");
+    placeholder.style.height = `${bounds.height}px`;
+    placeholder.style.minHeight = `${bounds.height}px`;
+
+    list.querySelector(".list-title")?.blur();
+    list.replaceWith(placeholder);
+    document.body.appendChild(preview);
+
+    activeListDrag = {
+        list,
+        placeholder,
+        preview,
+        pointerOffsetX,
+        pointerOffsetY
+    };
+
+    updateListPreviewPosition(clientX, clientY);
+
+    requestAnimationFrame(() => {
+        preview.classList.add("is-tilted");
+    });
+
+    window.addEventListener("pointermove", handleListPointerMove);
+    window.addEventListener("pointerup", handleListPointerUp);
+    window.addEventListener("pointercancel", handleListPointerCancel);
+
+    document.body.classList.add("list-drag-active");
+}
+
+function handlePendingListPointerMove(event) {
+    if (!pendingListDrag || event.pointerId !== pendingListDrag.pointerId) {
+        return;
+    }
+
+    const travelledX = event.clientX - pendingListDrag.startX;
+    const travelledY = event.clientY - pendingListDrag.startY;
+
+    if (Math.hypot(travelledX, travelledY) < LIST_DRAG_THRESHOLD) {
+        return;
+    }
+
+    const pendingDrag = pendingListDrag;
+
+    clearPendingListDrag();
+    beginListDrag(pendingDrag, event.clientX, event.clientY);
+    event.preventDefault();
+}
+
+function handlePendingListPointerUp(event) {
+    if (!pendingListDrag || event.pointerId !== pendingListDrag.pointerId) {
+        return;
+    }
+
+    clearPendingListDrag();
+}
+
+function handlePendingListPointerCancel(event) {
+    if (!pendingListDrag || event.pointerId !== pendingListDrag.pointerId) {
+        return;
+    }
+
+    clearPendingListDrag();
+}
+
 function resetCardCloneState(cardElement) {
     cardElement.classList.remove(
         "card-drop-settle",
@@ -143,6 +320,32 @@ function resetCardCloneState(cardElement) {
         "is-dropping",
         "is-settling"
     );
+}
+
+function resetListCloneState(listElement) {
+    listElement.classList.remove(
+        "list-drop-settle",
+        "list-preview",
+        "list-placeholder",
+        "is-tilted",
+        "is-dropping",
+        "is-settling"
+    );
+
+    listElement
+        .querySelectorAll(
+            ".card-drop-settle, .card-preview, .card-placeholder, .is-tilted, .is-dropping, .is-settling"
+        )
+        .forEach((element) => {
+            element.classList.remove(
+                "card-drop-settle",
+                "card-preview",
+                "card-placeholder",
+                "is-tilted",
+                "is-dropping",
+                "is-settling"
+            );
+        });
 }
 
 function animateDroppedCard(card) {
@@ -196,6 +399,18 @@ function finishCardDrop({ deleteCard = false } = {}) {
     }, DROP_ANIMATION_MS);
 }
 
+function finishListDrop() {
+    if (!activeListDrag) return;
+
+    const listDrag = activeListDrag;
+    const { list, placeholder, preview } = listDrag;
+
+    preview.remove();
+    placeholder.replaceWith(list);
+    stopListPointerTracking();
+    resetListDragState();
+}
+
 function handleCardPointerUp(event) {
     if (!activeCardDrag) return;
 
@@ -203,10 +418,22 @@ function handleCardPointerUp(event) {
     finishCardDrop({ deleteCard: overTrash });
 }
 
+function handleListPointerUp() {
+    if (!activeListDrag) return;
+
+    finishListDrop();
+}
+
 function handleCardPointerCancel() {
     if (!activeCardDrag) return;
 
     finishCardDrop();
+}
+
+function handleListPointerCancel() {
+    if (!activeListDrag) return;
+
+    clearListDrag();
 }
 
 function formatCardDate(dateValue) {
@@ -381,6 +608,8 @@ function setupList(list) {
     if (addCardButton) {
         setupAddCardButton(addCardButton);
     }
+
+    setupListDrag(list);
 }
 
 document.addEventListener("keydown", (event) => {
@@ -457,6 +686,53 @@ function setupCard(card) {
 
         document.body.classList.add("card-drag-active");
         event.preventDefault();
+    });
+}
+
+function setupListDrag(list) {
+    list.draggable = false;
+
+    list.addEventListener("dragstart", (event) => {
+        event.preventDefault();
+    });
+
+    list.addEventListener("pointerdown", (event) => {
+        if (
+            event.button !== 0 ||
+            event.target.closest(".card, .card-composer, button, textarea") ||
+            event.target.closest("input:not(.list-title)")
+        ) {
+            return;
+        }
+
+        if (activeCardDrag) {
+            clearCardDrag();
+        }
+
+        if (activeListDrag) {
+            clearListDrag();
+        }
+
+        if (pendingListDrag) {
+            clearPendingListDrag();
+        }
+
+        const bounds = list.getBoundingClientRect();
+        const pointerOffsetX = event.clientX - bounds.left;
+        const pointerOffsetY = event.clientY - bounds.top;
+
+        pendingListDrag = {
+            list,
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            pointerOffsetX,
+            pointerOffsetY
+        };
+
+        window.addEventListener("pointermove", handlePendingListPointerMove);
+        window.addEventListener("pointerup", handlePendingListPointerUp);
+        window.addEventListener("pointercancel", handlePendingListPointerCancel);
     });
 }
 
