@@ -278,6 +278,10 @@ body {
   cursor: pointer;
 }
 
+.add-list.is-hidden {
+  display: none;
+}
+
 .card:last-child {
   margin-bottom: 0;
 }
@@ -317,6 +321,32 @@ body {
 
 .list-placeholder .add-card {
   opacity: 0.7;
+}
+
+.list-ghost {
+  min-height: 174px;
+  background-color: rgba(238, 232, 221, 0.92);
+  border: 2px dashed rgba(98, 92, 87, 0.42);
+  box-shadow: none;
+  opacity: 0.72;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.list-ghost .list-cards {
+  min-height: 82px;
+}
+
+.list-ghost .card-options {
+  display: none;
+}
+
+.list-ghost .add-card {
+  opacity: 0.58;
+}
+
+.list-ghost .list-title,
+.list-ghost .list-title::placeholder {
+  color: rgba(59, 43, 35, 0.55);
 }
 
 .card-preview {

@@ -10,16 +10,21 @@ let actionHistory = [];
 let activeCardDrag = null;
 let activeListDrag = null;
 let pendingListDrag = null;
+let activeCardNewListGhost = null;
 
 const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
 let lastListColour = null;
 const DROP_ANIMATION_MS = 180;
 const LIST_DRAG_THRESHOLD = 6;
 const EMPTY_CARD_DATE_LABEL = "No due date";
+const BOARD_STORAGE_KEY = "lockt.board.v1";
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric"
 });
+
+let date = new Date();
+alert(date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate());
 
 function getRandomListColour() {
     const availableColours = colours.filter((colour) => {
@@ -36,7 +41,9 @@ function getRandomListColour() {
 
 function getListAfterPointer(pointerX) {
     const otherLists = [
-        ...listsRow.querySelectorAll(".list:not(.list-placeholder)")
+        ...listsRow.querySelectorAll(
+            '.list:not(.list-placeholder):not([data-ghost-list="true"])'
+        )
     ];
 
     return otherLists.reduce(
@@ -74,6 +81,90 @@ function insertNodeAt(parent, node, nextSibling = null) {
     parent.appendChild(node);
 }
 
+function readBoardState() {
+    try {
+        const savedBoardState = window.localStorage.getItem(BOARD_STORAGE_KEY);
+
+        if (!savedBoardState) {
+            return null;
+        }
+
+        const parsedBoardState = JSON.parse(savedBoardState);
+
+        if (!parsedBoardState || !Array.isArray(parsedBoardState.lists)) {
+            return null;
+        }
+
+        return parsedBoardState;
+    } catch (error) {
+        console.warn("Unable to read saved board state", error);
+        return null;
+    }
+}
+
+function getCardTitleText(card) {
+    const description = card.querySelector("p");
+
+    if (!description) {
+        return "";
+    }
+
+    return (description.innerText || description.textContent || "")
+        .replace(/\r\n/g, "\n")
+        .trim();
+}
+
+function getCardData(card) {
+    const date = card.querySelector(".date");
+    const dateLabel = date?.textContent?.trim() || EMPTY_CARD_DATE_LABEL;
+
+    return {
+        title: getCardTitleText(card),
+        dateLabel,
+        isEmptyDate:
+            date?.classList.contains("is-empty") ||
+            dateLabel === EMPTY_CARD_DATE_LABEL,
+        urgent: card.classList.contains("urgent")
+    };
+}
+
+function getListData(list) {
+    const titleInput = list.querySelector(".list-title");
+    const cardsContainer = list.querySelector(".list-cards");
+
+    return {
+        title: titleInput?.value || "",
+        backgroundColor: window.getComputedStyle(list).backgroundColor,
+        cards: cardsContainer
+            ? [...cardsContainer.querySelectorAll(".card")].map(getCardData)
+            : []
+    };
+}
+
+function getBoardState() {
+    const lists = [...listsRow.children].filter((element) => {
+        return (
+            element.classList.contains("list") &&
+            element.dataset.ghostList !== "true"
+        );
+    });
+
+    return {
+        lists: lists.map(getListData)
+    };
+}
+
+function saveBoardState() {
+    try {
+        window.localStorage.setItem(
+            BOARD_STORAGE_KEY,
+            JSON.stringify(getBoardState())
+        );
+    } catch (error) {
+        console.warn("Unable to save board state", error);
+    }
+}
+
 function clearDragHighlights() {
     document.querySelectorAll(".list-cards").forEach((container) => {
         container.classList.remove("drag-over");
@@ -103,6 +194,69 @@ function resetListDragState() {
 
 function resetPendingListDragState() {
     pendingListDrag = null;
+}
+
+function resetCardNewListGhostState() {
+    activeCardNewListGhost = null;
+}
+
+function ensureCardNewListGhost() {
+    if (activeCardNewListGhost?.list?.isConnected) {
+        return activeCardNewListGhost;
+    }
+
+    const list = buildListElement({
+        title: "",
+        cards: []
+    });
+    const container = list.querySelector(".list-cards");
+    const titleInput = list.querySelector(".list-title");
+
+    list.dataset.ghostList = "true";
+    list.classList.add("list-ghost");
+    titleInput.value = "";
+    titleInput.placeholder = "New List";
+
+    listsRow.insertBefore(list, addListButton);
+    addListButton.classList.add("is-hidden");
+
+    activeCardNewListGhost = {
+        list,
+        container,
+        titleInput
+    };
+
+    return activeCardNewListGhost;
+}
+
+function removeCardNewListGhost() {
+    if (!activeCardNewListGhost) return;
+
+    activeCardNewListGhost.list.remove();
+    addListButton.classList.remove("is-hidden");
+    resetCardNewListGhostState();
+}
+
+function finalizeCardNewListGhost() {
+    if (!activeCardNewListGhost) {
+        return null;
+    }
+
+    const ghostList = activeCardNewListGhost;
+
+    ghostList.list.classList.remove("list-ghost");
+    ghostList.list.style.backgroundColor = getRandomListColour();
+    delete ghostList.list.dataset.ghostList;
+    addListButton.classList.remove("is-hidden");
+
+    recordAction({
+        type: "list-add",
+        list: ghostList.list
+    });
+
+    resetCardNewListGhostState();
+
+    return ghostList;
 }
 
 function clearListDrag({ restore = true } = {}) {
@@ -169,6 +323,22 @@ function getPointerDropTarget(clientX, clientY) {
         return { container: null, overTrash: true };
     }
 
+    const ghostList = target.closest('[data-ghost-list="true"]');
+
+    if (ghostList) {
+        return {
+            container: ghostList.querySelector(".list-cards"),
+            overTrash: false
+        };
+    }
+
+    if (activeCardDrag && target.closest(".add-list")) {
+        return {
+            container: ensureCardNewListGhost().container,
+            overTrash: false
+        };
+    }
+
     return {
         container: target.closest(".list-cards"),
         overTrash: false
@@ -220,6 +390,13 @@ function handleCardPointerMove(event) {
         activeCardDrag.placeholder,
         event.clientY
     );
+
+    if (
+        activeCardNewListGhost &&
+        container !== activeCardNewListGhost.container
+    ) {
+        removeCardNewListGhost();
+    }
 }
 
 function updateListPreviewPosition(clientX, clientY) {
@@ -396,22 +573,41 @@ function finishCardDrop({ deleteCard = false } = {}) {
 
     const cardDrag = activeCardDrag;
     const { card, placeholder, preview, sourceList } = cardDrag;
+    const ghostList = activeCardNewListGhost;
+    const droppedInGhost =
+        ghostList && placeholder.parentElement === ghostList.container;
 
     stopCardPointerTracking();
     resetCardDragState();
 
     if (deleteCard) {
+        const restoreParent = droppedInGhost
+            ? sourceList
+            : placeholder.parentElement || sourceList;
+
         recordAction({
             type: "card-delete",
             card,
-            parent: placeholder.parentElement || sourceList,
-            nextSibling: placeholder.nextElementSibling
+            parent: restoreParent,
+            nextSibling: droppedInGhost ? null : placeholder.nextElementSibling
         });
 
         placeholder.remove();
         preview.remove();
+        removeCardNewListGhost();
+        saveBoardState();
         showDeleteAlert();
         return;
+    }
+
+    let newListTitleInput = null;
+
+    if (ghostList) {
+        if (droppedInGhost) {
+            newListTitleInput = finalizeCardNewListGhost()?.titleInput || null;
+        } else {
+            removeCardNewListGhost();
+        }
     }
 
     const targetBounds = placeholder.getBoundingClientRect();
@@ -428,6 +624,11 @@ function finishCardDrop({ deleteCard = false } = {}) {
         placeholder.replaceWith(card);
         animateDroppedCard(card);
         preview.remove();
+        saveBoardState();
+
+        if (newListTitleInput) {
+            newListTitleInput.focus();
+        }
     }, DROP_ANIMATION_MS);
 }
 
@@ -449,6 +650,7 @@ function finishListDrop({ deleteList = false } = {}) {
         preview.remove();
         stopListPointerTracking();
         resetListDragState();
+        saveBoardState();
         showDeleteAlert();
         return;
     }
@@ -457,6 +659,7 @@ function finishListDrop({ deleteList = false } = {}) {
     placeholder.replaceWith(list);
     stopListPointerTracking();
     resetListDragState();
+    saveBoardState();
 }
 
 function handleCardPointerUp(event) {
@@ -501,20 +704,41 @@ function formatCardDate(dateValue) {
 }
 
 function createCardElement(title, dateValue) {
+    const formattedDate = formatCardDate(dateValue);
+
+    return buildCardElement({
+        title,
+        dateLabel: formattedDate,
+        isEmptyDate: formattedDate === EMPTY_CARD_DATE_LABEL
+    });
+}
+
+function buildCardElement(cardData = {}) {
     const card = document.createElement("div");
     const options = document.createElement("div");
     const description = document.createElement("p");
     const date = document.createElement("div");
-    const formattedDate = formatCardDate(dateValue);
+    const title = typeof cardData.title === "string" ? cardData.title.trim() : "";
+    const dateLabel =
+        typeof cardData.dateLabel === "string" && cardData.dateLabel.trim()
+            ? cardData.dateLabel.trim()
+            : EMPTY_CARD_DATE_LABEL;
+    const isEmptyDate =
+        Boolean(cardData.isEmptyDate) || dateLabel === EMPTY_CARD_DATE_LABEL;
 
     card.className = "card";
+
+    if (cardData.urgent) {
+        card.classList.add("urgent");
+    }
+
     options.className = "card-options";
     options.textContent = "•••";
-    description.textContent = title.trim();
+    description.textContent = title;
     date.className = "date";
-    date.textContent = formattedDate;
+    date.textContent = dateLabel;
 
-    if (formattedDate === EMPTY_CARD_DATE_LABEL) {
+    if (isEmptyDate) {
         date.classList.add("is-empty");
     }
 
@@ -524,6 +748,59 @@ function createCardElement(title, dateValue) {
     setupCardOptions(options);
 
     return card;
+}
+
+function buildListElement(listData = {}) {
+    const clone = template.content.cloneNode(true);
+    const list = clone.querySelector(".list");
+    const titleInput = clone.querySelector(".list-title");
+    const cardsContainer = clone.querySelector(".list-cards");
+    const cards = Array.isArray(listData.cards) ? listData.cards : [];
+
+    titleInput.value = typeof listData.title === "string" ? listData.title : "";
+    titleInput.placeholder = "New List";
+    cardsContainer.replaceChildren();
+
+    cards.forEach((cardData) => {
+        cardsContainer.appendChild(buildCardElement(cardData));
+    });
+
+    if (typeof listData.backgroundColor === "string" && listData.backgroundColor) {
+        list.style.backgroundColor = listData.backgroundColor;
+    }
+
+    setupList(list);
+
+    return list;
+}
+
+function applyBoardState(boardState) {
+    [...listsRow.children]
+        .filter((element) => element.classList.contains("list"))
+        .forEach((list) => {
+            list.remove();
+        });
+
+    boardState.lists.forEach((listData) => {
+        const list = buildListElement(listData);
+        listsRow.insertBefore(list, addListButton);
+    });
+
+    actionHistory = [];
+}
+
+function initializeBoard() {
+    const savedBoardState = readBoardState();
+
+    if (savedBoardState) {
+        applyBoardState(savedBoardState);
+        return;
+    }
+
+    document.querySelectorAll(".card").forEach(setupCard);
+    document.querySelectorAll(".card-options").forEach(setupCardOptions);
+    document.querySelectorAll(".list").forEach(setupList);
+    saveBoardState();
 }
 
 function closeCardComposer(list, shouldFocusButton = false) {
@@ -628,6 +905,7 @@ function openCardComposer(list) {
 
         container.appendChild(newCard);
         closeCardComposer(list);
+        saveBoardState();
         newCard.scrollIntoView({
             block: "nearest",
             inline: "nearest"
@@ -650,6 +928,7 @@ function setupAddCardButton(button) {
 function setupList(list) {
     const container = list.querySelector(".list-cards");
     const addCardButton = list.querySelector(".add-card");
+    const titleInput = list.querySelector(".list-title");
 
     if (container) {
         setupContainer(container);
@@ -657,6 +936,11 @@ function setupList(list) {
 
     if (addCardButton) {
         setupAddCardButton(addCardButton);
+    }
+
+    if (titleInput) {
+        titleInput.addEventListener("input", saveBoardState);
+        titleInput.addEventListener("change", saveBoardState);
     }
 
     setupListDrag(list);
@@ -676,6 +960,7 @@ document.addEventListener("keydown", (event) => {
                 lastAction.card,
                 lastAction.nextSibling
             );
+            saveBoardState();
             return;
         }
 
@@ -685,11 +970,13 @@ document.addEventListener("keydown", (event) => {
                 lastAction.list,
                 lastAction.nextSibling
             );
+            saveBoardState();
             return;
         }
 
         if (lastAction.type === "list-add" && lastAction.list.isConnected) {
             lastAction.list.remove();
+            saveBoardState();
         }
     }
 });
@@ -870,13 +1157,9 @@ function setupTrash(container) {
         });
 
         draggedCard.remove();
-
+        saveBoardState();
         container.classList.remove("drag-over");
-        alertBox.classList.add("show");
-
-        setTimeout(() => {
-            alertBox.classList.remove("show");
-        }, 5000);
+        showDeleteAlert();
     });
 }
 
@@ -919,15 +1202,14 @@ function createList() {
         type: "list-add",
         list
     });
+    saveBoardState();
 
     requestAnimationFrame(() => {
         titleInput.focus();
     });
 }
 
-document.querySelectorAll(".card").forEach(setupCard);
-document.querySelectorAll(".card-options").forEach(setupCardOptions);
-document.querySelectorAll(".list").forEach(setupList);
+initializeBoard();
 setupTrash(trash);
 
 addListButton.addEventListener("click", () => {
