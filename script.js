@@ -3,6 +3,7 @@ const template = document.querySelector("#list-template");
 const listsRow = document.querySelector(".lists-row");
 const trash = document.querySelector("#trash");
 const alertBox = document.querySelector("#alert");
+const cardEditorBackdrop = document.querySelector("#card-editor-backdrop");
 
 let draggedCard = null;
 let draggedFromList = null;
@@ -11,10 +12,12 @@ let activeCardDrag = null;
 let activeListDrag = null;
 let pendingListDrag = null;
 let activeCardNewListGhost = null;
+let activeCardEditor = null;
 
 const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
 let lastListColour = null;
 const DROP_ANIMATION_MS = 180;
+const CARD_EDITOR_TRANSITION_MS = 240;
 const LIST_DRAG_THRESHOLD = 6;
 const EMPTY_CARD_DATE_LABEL = "No due date";
 const BOARD_STORAGE_KEY = "lockt.board.v1";
@@ -23,8 +26,6 @@ const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     day: "numeric"
 });
 
-let date = new Date();
-alert(date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate());
 
 function getRandomListColour() {
     const availableColours = colours.filter((colour) => {
@@ -117,9 +118,11 @@ function getCardTitleText(card) {
 function getCardData(card) {
     const date = card.querySelector(".date");
     const dateLabel = date?.textContent?.trim() || EMPTY_CARD_DATE_LABEL;
+    const dateValue = getCardDateValue(card);
 
     return {
         title: getCardTitleText(card),
+        dateValue,
         dateLabel,
         isEmptyDate:
             date?.classList.contains("is-empty") ||
@@ -198,6 +201,242 @@ function resetPendingListDragState() {
 
 function resetCardNewListGhostState() {
     activeCardNewListGhost = null;
+}
+
+function formatDateInputValue(date) {
+    return [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+        String(date.getDate()).padStart(2, "0")
+    ].join("-");
+}
+
+function normalizeDateValue(dateValue) {
+    if (typeof dateValue !== "string" || !dateValue.trim()) {
+        return "";
+    }
+
+    const trimmedDateValue = dateValue.trim();
+    const parsedDate = new Date(`${trimmedDateValue}T00:00:00`);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+        return "";
+    }
+
+    return formatDateInputValue(parsedDate);
+}
+
+function deriveDateValueFromLabel(dateLabel) {
+    if (typeof dateLabel !== "string") {
+        return "";
+    }
+
+    const trimmedLabel = dateLabel.replace(/^◷\s*/, "").trim();
+
+    if (!trimmedLabel || trimmedLabel === EMPTY_CARD_DATE_LABEL) {
+        return "";
+    }
+
+    const fallbackYear = new Date().getFullYear();
+    const parsedDate = new Date(`${trimmedLabel}, ${fallbackYear} 00:00:00`);
+
+    if (Number.isNaN(parsedDate.getTime())) {
+        return "";
+    }
+
+    return formatDateInputValue(parsedDate);
+}
+
+function getCardDateValue(card) {
+    const date = card.querySelector(".date");
+
+    if (!date) {
+        return "";
+    }
+
+    const normalizedDateValue = normalizeDateValue(date.dataset.dateValue || "");
+
+    if (normalizedDateValue) {
+        date.dataset.dateValue = normalizedDateValue;
+        return normalizedDateValue;
+    }
+
+    const derivedDateValue = deriveDateValueFromLabel(
+        date.textContent?.trim() || ""
+    );
+
+    if (derivedDateValue) {
+        date.dataset.dateValue = derivedDateValue;
+    }
+
+    return derivedDateValue;
+}
+
+function renderCardDisplayContent(card, cardData = {}) {
+    const title = typeof cardData.title === "string" ? cardData.title.trim() : "";
+    const fallbackDateLabel =
+        typeof cardData.dateLabel === "string" && cardData.dateLabel.trim()
+            ? cardData.dateLabel.trim()
+            : EMPTY_CARD_DATE_LABEL;
+    const dateValue =
+        normalizeDateValue(cardData.dateValue) ||
+        deriveDateValueFromLabel(fallbackDateLabel);
+    const options = document.createElement("div");
+    const description = document.createElement("p");
+    const date = document.createElement("div");
+
+    if (typeof cardData.urgent === "boolean") {
+        card.classList.toggle("urgent", cardData.urgent);
+    }
+
+    options.className = "card-options";
+    options.textContent = "•••";
+    options.setAttribute("role", "button");
+    options.setAttribute("aria-label", "Edit card");
+    options.tabIndex = 0;
+
+    description.textContent = title;
+    date.className = "date";
+    date.textContent = dateValue ? formatCardDate(dateValue) : fallbackDateLabel;
+
+    if (dateValue) {
+        date.dataset.dateValue = dateValue;
+    } else if (fallbackDateLabel === EMPTY_CARD_DATE_LABEL) {
+        date.classList.add("is-empty");
+    }
+
+    card.replaceChildren(options, description, date);
+    setupCardOptions(options);
+}
+
+function renderCardEditorContent(card) {
+    const fields = document.createElement("div");
+    const titleInput = document.createElement("input");
+    const dateInput = document.createElement("input");
+
+    fields.className = "card-editor-fields";
+
+    titleInput.className = "card-title-editor";
+    titleInput.type = "text";
+    titleInput.maxLength = 120;
+    titleInput.placeholder = "Card title";
+    titleInput.value = getCardTitleText(card);
+    titleInput.setAttribute("aria-label", "Card title");
+
+    dateInput.className = "card-date-editor";
+    dateInput.type = "date";
+    dateInput.value = getCardDateValue(card);
+    dateInput.setAttribute("aria-label", "Due date");
+
+    fields.append(titleInput, dateInput);
+    card.replaceChildren(fields);
+
+    return {
+        titleInput,
+        dateInput
+    };
+}
+
+function openCardEditor(card) {
+    if (!card || activeCardEditor || !cardEditorBackdrop) {
+        return;
+    }
+
+    if (activeCardDrag) {
+        clearCardDrag();
+    }
+
+    if (activeListDrag) {
+        clearListDrag();
+    }
+
+    if (pendingListDrag) {
+        clearPendingListDrag();
+    }
+
+    const bounds = card.getBoundingClientRect();
+    const placeholder = card.cloneNode(true);
+    const translateX = window.innerWidth / 2 - (bounds.left + bounds.width / 2);
+    const translateY = window.innerHeight / 2 - (bounds.top + bounds.height / 2);
+
+    resetCardCloneState(placeholder);
+    placeholder.classList.add("card-editor-placeholder");
+    placeholder.style.height = `${bounds.height}px`;
+    placeholder.style.minHeight = `${bounds.height}px`;
+
+    card.replaceWith(placeholder);
+    document.body.appendChild(card);
+
+    card.classList.add("card-editor-active");
+    card.style.left = `${bounds.left}px`;
+    card.style.top = `${bounds.top}px`;
+    card.style.width = `${bounds.width}px`;
+    card.style.minHeight = `${bounds.height}px`;
+    card.style.setProperty("--card-editor-translate-x", `${translateX}px`);
+    card.style.setProperty("--card-editor-translate-y", `${translateY}px`);
+
+    const { titleInput, dateInput } = renderCardEditorContent(card);
+
+    activeCardEditor = {
+        card,
+        placeholder,
+        titleInput,
+        dateInput
+    };
+
+    cardEditorBackdrop.hidden = false;
+    document.body.classList.add("card-editor-open");
+
+    requestAnimationFrame(() => {
+        cardEditorBackdrop.classList.add("show");
+        card.classList.add("is-open");
+        titleInput.focus();
+        titleInput.select();
+    });
+}
+
+function closeCardEditor({ focusOptions = false } = {}) {
+    if (!activeCardEditor || !cardEditorBackdrop) {
+        return;
+    }
+
+    const { card, placeholder, titleInput, dateInput } = activeCardEditor;
+
+    renderCardDisplayContent(card, {
+        title: titleInput.value,
+        dateValue: dateInput.value,
+        urgent: card.classList.contains("urgent")
+    });
+
+    card.classList.remove("is-open");
+    cardEditorBackdrop.classList.remove("show");
+
+    window.setTimeout(() => {
+        if (!activeCardEditor || activeCardEditor.card !== card) {
+            return;
+        }
+
+        card.classList.remove("card-editor-active");
+        card.style.removeProperty("left");
+        card.style.removeProperty("top");
+        card.style.removeProperty("width");
+        card.style.removeProperty("min-height");
+        card.style.removeProperty("--card-editor-translate-x");
+        card.style.removeProperty("--card-editor-translate-y");
+        document.body.classList.remove("card-editor-open");
+        cardEditorBackdrop.hidden = true;
+
+        if (placeholder.isConnected) {
+            placeholder.replaceWith(card);
+        }
+
+        activeCardEditor = null;
+        saveBoardState();
+
+        if (focusOptions) {
+            card.querySelector(".card-options")?.focus();
+        }
+    }, CARD_EDITOR_TRANSITION_MS);
 }
 
 function ensureCardNewListGhost() {
@@ -708,6 +947,7 @@ function createCardElement(title, dateValue) {
 
     return buildCardElement({
         title,
+        dateValue,
         dateLabel: formattedDate,
         isEmptyDate: formattedDate === EMPTY_CARD_DATE_LABEL
     });
@@ -715,16 +955,6 @@ function createCardElement(title, dateValue) {
 
 function buildCardElement(cardData = {}) {
     const card = document.createElement("div");
-    const options = document.createElement("div");
-    const description = document.createElement("p");
-    const date = document.createElement("div");
-    const title = typeof cardData.title === "string" ? cardData.title.trim() : "";
-    const dateLabel =
-        typeof cardData.dateLabel === "string" && cardData.dateLabel.trim()
-            ? cardData.dateLabel.trim()
-            : EMPTY_CARD_DATE_LABEL;
-    const isEmptyDate =
-        Boolean(cardData.isEmptyDate) || dateLabel === EMPTY_CARD_DATE_LABEL;
 
     card.className = "card";
 
@@ -732,20 +962,9 @@ function buildCardElement(cardData = {}) {
         card.classList.add("urgent");
     }
 
-    options.className = "card-options";
-    options.textContent = "•••";
-    description.textContent = title;
-    date.className = "date";
-    date.textContent = dateLabel;
-
-    if (isEmptyDate) {
-        date.classList.add("is-empty");
-    }
-
-    card.append(options, description, date);
+    renderCardDisplayContent(card, cardData);
 
     setupCard(card);
-    setupCardOptions(options);
 
     return card;
 }
@@ -797,8 +1016,10 @@ function initializeBoard() {
         return;
     }
 
-    document.querySelectorAll(".card").forEach(setupCard);
-    document.querySelectorAll(".card-options").forEach(setupCardOptions);
+    document.querySelectorAll(".card").forEach((card) => {
+        renderCardDisplayContent(card, getCardData(card));
+        setupCard(card);
+    });
     document.querySelectorAll(".list").forEach(setupList);
     saveBoardState();
 }
@@ -947,6 +1168,15 @@ function setupList(list) {
 }
 
 document.addEventListener("keydown", (event) => {
+    if (activeCardEditor) {
+        if (event.key === "Escape") {
+            event.preventDefault();
+            closeCardEditor({ focusOptions: true });
+        }
+
+        return;
+    }
+
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
 
@@ -989,6 +1219,10 @@ function setupCard(card) {
     });
 
     card.addEventListener("pointerdown", (event) => {
+        if (card === activeCardEditor?.card) {
+            return;
+        }
+
         if (event.button !== 0 || event.target.closest(".card-options")) {
             return;
         }
@@ -1094,9 +1328,22 @@ function setupListDrag(list) {
 }
 
 function setupCardOptions(options) {
+    options.setAttribute("role", "button");
+    options.setAttribute("aria-label", "Edit card");
+    options.tabIndex = 0;
+
     options.addEventListener("click", (event) => {
         event.stopPropagation();
-        console.log("Card options clicked");
+        openCardEditor(options.closest(".card"));
+    });
+
+    options.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+            return;
+        }
+
+        event.preventDefault();
+        openCardEditor(options.closest(".card"));
     });
 }
 
@@ -1214,4 +1461,8 @@ setupTrash(trash);
 
 addListButton.addEventListener("click", () => {
     createList();
+});
+
+cardEditorBackdrop?.addEventListener("click", () => {
+    closeCardEditor();
 });
