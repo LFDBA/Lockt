@@ -1,19 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Indie+Flower&display=swap');
-
 :root {
   --list-width: 238px;
 }
 
 * {
   box-sizing: border-box;
-}
-
-body {
-  margin: 0;
-  font-family: "Indie Flower", cursive;
-  background-color: #ece9e1;
-  color: #3b2b23;
-  overflow-x: auto;
 }
 
 .board {
