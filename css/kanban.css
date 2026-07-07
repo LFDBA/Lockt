@@ -6,27 +6,6 @@
   box-sizing: border-box;
 }
 
-.board {
-  min-height: 100vh;
-  padding: 45px 55px;
-  border-radius: 35px;
-  background-color: #f3f0ea;
-  min-width: max-content;
-}
-
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 40px;
-}
-
-.top-bar h1 {
-  margin: 0;
-  font-size: 52px;
-  font-weight: 400;
-  text-shadow: 2px 3px 4px rgba(0,0,0,0.25);
-}
 
 .back,
 .settings {
