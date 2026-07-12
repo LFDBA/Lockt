@@ -20,12 +20,85 @@ const DROP_ANIMATION_MS = 180;
 const CARD_EDITOR_TRANSITION_MS = 240;
 const LIST_DRAG_THRESHOLD = 6;
 const EMPTY_CARD_DATE_LABEL = "No due date";
-const BOARD_STORAGE_KEY = "lockt.board.v1";
+const DEFAULT_BOARD_STORAGE_KEY = "My Project";
+const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
+const ACTIVE_BOARD_STORAGE_KEY = "lockt:active-kanban-project";
+const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
+const BOARD_STORAGE_KEY = getSelectedBoardStorageKey();
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric"
 });
 
+function normalizeProjectName(projectName) {
+    return typeof projectName === "string" ? projectName.trim() : "";
+}
+
+function readProjectNames() {
+    try {
+        const savedProjectNames = JSON.parse(
+            window.localStorage.getItem(PROJECTS_STORAGE_KEY) || "[]"
+        );
+
+        return Array.isArray(savedProjectNames)
+            ? savedProjectNames.map(normalizeProjectName).filter(Boolean)
+            : [];
+    } catch (error) {
+        console.warn("Unable to read saved project names", error);
+        return [];
+    }
+}
+
+function saveProjectNames(projectNames) {
+    try {
+        window.localStorage.setItem(
+            PROJECTS_STORAGE_KEY,
+            JSON.stringify([...new Set(projectNames)])
+        );
+    } catch (error) {
+        console.warn("Unable to save project names", error);
+    }
+}
+
+function rememberProjectName(projectName) {
+    const normalizedProjectName = normalizeProjectName(projectName);
+
+    if (!normalizedProjectName) return;
+
+    const projectNames = readProjectNames();
+
+    if (!projectNames.includes(normalizedProjectName)) {
+        saveProjectNames([...projectNames, normalizedProjectName]);
+    }
+}
+
+function getSelectedBoardStorageKey() {
+    const projectFromUrl = normalizeProjectName(
+        new URLSearchParams(window.location.search).get("project")
+    );
+
+    if (projectFromUrl) {
+        window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, projectFromUrl);
+        rememberProjectName(projectFromUrl);
+        return projectFromUrl;
+    }
+
+    const activeProject = normalizeProjectName(
+        window.localStorage.getItem(ACTIVE_BOARD_STORAGE_KEY)
+    );
+
+    return activeProject || DEFAULT_BOARD_STORAGE_KEY;
+}
+
+function syncBoardTitle() {
+    document.title = `${BOARD_STORAGE_KEY} Board`;
+
+    const title = document.querySelector(".top-bar h1");
+
+    if (title) {
+        title.textContent = BOARD_STORAGE_KEY;
+    }
+}
 
 document.querySelector(".back")?.addEventListener("click", () => {
     window.location.href = "index.html";
@@ -88,7 +161,11 @@ function insertNodeAt(parent, node, nextSibling = null) {
 
 function readBoardState() {
     try {
-        const savedBoardState = window.localStorage.getItem(BOARD_STORAGE_KEY);
+        const savedBoardState =
+            window.localStorage.getItem(BOARD_STORAGE_KEY) ||
+            (BOARD_STORAGE_KEY === DEFAULT_BOARD_STORAGE_KEY
+                ? window.localStorage.getItem(LEGACY_BOARD_STORAGE_KEY)
+                : null);
 
         if (!savedBoardState) {
             return null;
@@ -163,6 +240,7 @@ function getBoardState() {
 
 function saveBoardState() {
     try {
+        rememberProjectName(BOARD_STORAGE_KEY);
         window.localStorage.setItem(
             BOARD_STORAGE_KEY,
             JSON.stringify(getBoardState())
@@ -1013,6 +1091,10 @@ function applyBoardState(boardState) {
 }
 
 function initializeBoard() {
+    rememberProjectName(BOARD_STORAGE_KEY);
+    window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, BOARD_STORAGE_KEY);
+    syncBoardTitle();
+
     const savedBoardState = readBoardState();
 
     if (savedBoardState) {
