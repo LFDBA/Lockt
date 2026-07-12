@@ -2,6 +2,12 @@ const DEFAULT_BOARD_STORAGE_KEY = "My Project";
 const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
 const ACTIVE_BOARD_STORAGE_KEY = "lockt:active-kanban-project";
 const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
+const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
+const creationDateFormatter = new Intl.DateTimeFormat("en-NZ", {
+    day: "numeric",
+    month: "short",
+    year: "numeric"
+});
 
 function normalizeProjectName(projectName) {
     return typeof projectName === "string" ? projectName.trim() : "";
@@ -20,6 +26,49 @@ function readProjectNames() {
         console.warn("Unable to read saved project names", error);
         return [];
     }
+}
+
+function readProjectMetadata() {
+    try {
+        const metadata = JSON.parse(
+            window.localStorage.getItem(PROJECT_METADATA_STORAGE_KEY) || "{}"
+        );
+
+        return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+            ? metadata
+            : {};
+    } catch (error) {
+        console.warn("Unable to read project metadata", error);
+        return {};
+    }
+}
+
+function getProjectCreationDate(projectName) {
+    const metadata = readProjectMetadata();
+    const savedCreationDate = metadata[projectName]?.createdAt;
+
+    if (
+        typeof savedCreationDate === "string" &&
+        !Number.isNaN(Date.parse(savedCreationDate))
+    ) {
+        return savedCreationDate;
+    }
+
+    const createdAt = new Date().toISOString();
+
+    try {
+        window.localStorage.setItem(
+            PROJECT_METADATA_STORAGE_KEY,
+            JSON.stringify({
+                ...metadata,
+                [projectName]: { createdAt }
+            })
+        );
+    } catch (error) {
+        console.warn("Unable to save project metadata", error);
+    }
+
+    return createdAt;
 }
 
 function looksLikeBoardStorageValue(value) {
@@ -63,17 +112,24 @@ function createProjectCard(projectName) {
     const link = document.createElement("a");
     const preview = document.createElement("div");
     const title = document.createElement("h3");
+    const creationDate = document.createElement("time");
+    const createdAt = getProjectCreationDate(projectName);
 
     recentBoard.className = "recent-board";
     link.href = `kanban.html?project=${encodeURIComponent(projectName)}`;
     preview.className = "board-preview kanban";
     title.textContent = projectName;
+    creationDate.className = "board-creation-date";
+    creationDate.dateTime = createdAt;
+    creationDate.textContent = `Created ${creationDateFormatter.format(
+        new Date(createdAt)
+    )}`;
 
     link.addEventListener("click", () => {
         selectProject(projectName);
     });
 
-    link.append(preview, title);
+    link.append(preview, title, creationDate);
     recentBoard.append(link);
 
     return recentBoard;

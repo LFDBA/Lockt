@@ -50,3 +50,10 @@
   font-weight: 400;
   overflow-wrap: anywhere;
 }
+
+.board-creation-date {
+  display: block;
+  margin-top: 2px;
+  color: #76665d;
+  font-size: 17px;
+}

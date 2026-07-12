@@ -24,6 +24,7 @@ const DEFAULT_BOARD_STORAGE_KEY = "My Project";
 const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
 const ACTIVE_BOARD_STORAGE_KEY = "lockt:active-kanban-project";
 const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
+const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
 const BOARD_STORAGE_KEY = getSelectedBoardStorageKey();
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -60,10 +61,44 @@ function saveProjectNames(projectNames) {
     }
 }
 
+function ensureProjectCreationDate(projectName) {
+    try {
+        const savedMetadata = JSON.parse(
+            window.localStorage.getItem(PROJECT_METADATA_STORAGE_KEY) || "{}"
+        );
+        const metadata =
+            savedMetadata &&
+            typeof savedMetadata === "object" &&
+            !Array.isArray(savedMetadata)
+                ? savedMetadata
+                : {};
+        const savedCreationDate = metadata[projectName]?.createdAt;
+
+        if (
+            typeof savedCreationDate === "string" &&
+            !Number.isNaN(Date.parse(savedCreationDate))
+        ) {
+            return;
+        }
+
+        window.localStorage.setItem(
+            PROJECT_METADATA_STORAGE_KEY,
+            JSON.stringify({
+                ...metadata,
+                [projectName]: { createdAt: new Date().toISOString() }
+            })
+        );
+    } catch (error) {
+        console.warn("Unable to save project metadata", error);
+    }
+}
+
 function rememberProjectName(projectName) {
     const normalizedProjectName = normalizeProjectName(projectName);
 
     if (!normalizedProjectName) return;
+
+    ensureProjectCreationDate(normalizedProjectName);
 
     const projectNames = readProjectNames();
 
