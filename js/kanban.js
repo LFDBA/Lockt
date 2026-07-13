@@ -14,6 +14,7 @@ let activeListDrag = null;
 let pendingListDrag = null;
 let activeCardNewListGhost = null;
 let activeCardEditor = null;
+let allowBoardNavigation = false;
 
 const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
 let lastListColour = null;
@@ -174,33 +175,46 @@ function rejectProjectTitle(message) {
     projectTitleInput.select();
 }
 
-function renameBoard(nextProjectName) {
-    const normalizedProjectName = normalizeProjectName(nextProjectName);
+function getProjectTitleValidationMessage(projectName) {
+    const normalizedProjectName = normalizeProjectName(projectName);
 
     if (!normalizedProjectName) {
-        rejectProjectTitle("Project title cannot be empty.");
-        return;
+        return "Project title cannot be empty.";
     }
 
     if (normalizedProjectName === BOARD_STORAGE_KEY) {
-        syncBoardTitle();
-        return;
+        return "";
     }
 
     if (
         normalizedProjectName.startsWith("lockt:") ||
         normalizedProjectName === LEGACY_BOARD_STORAGE_KEY
     ) {
-        rejectProjectTitle("That project title is reserved.");
-        return;
+        return "That project title is reserved.";
     }
 
     if (
         readProjectNames().includes(normalizedProjectName) ||
         window.localStorage.getItem(normalizedProjectName) !== null
     ) {
-        rejectProjectTitle("A project with that title already exists.");
-        return;
+        return "A project with that title already exists.";
+    }
+
+    return "";
+}
+
+function renameBoard(nextProjectName) {
+    const normalizedProjectName = normalizeProjectName(nextProjectName);
+    const validationMessage = getProjectTitleValidationMessage(nextProjectName);
+
+    if (validationMessage) {
+        rejectProjectTitle(validationMessage);
+        return false;
+    }
+
+    if (normalizedProjectName === BOARD_STORAGE_KEY) {
+        syncBoardTitle();
+        return true;
     }
 
     const previousProjectName = BOARD_STORAGE_KEY;
@@ -229,9 +243,11 @@ function renameBoard(nextProjectName) {
         nextUrl.searchParams.set("project", BOARD_STORAGE_KEY);
         window.history.replaceState(null, "", nextUrl);
         syncBoardTitle();
+        return true;
     } catch (error) {
         console.warn("Unable to rename project", error);
         rejectProjectTitle("Unable to rename this project.");
+        return false;
     }
 }
 
@@ -239,21 +255,33 @@ function setupProjectTitleEditor() {
     if (!projectTitleInput) return;
 
     projectTitleInput.addEventListener("input", () => {
-        projectTitleInput.setCustomValidity("");
+        projectTitleInput.setCustomValidity(
+            getProjectTitleValidationMessage(projectTitleInput.value)
+        );
     });
     projectTitleInput.addEventListener("change", () => {
         renameBoard(projectTitleInput.value);
     });
     projectTitleInput.addEventListener("blur", () => {
-        if (normalizeProjectName(projectTitleInput.value)) return;
+        const validationMessage = getProjectTitleValidationMessage(
+            projectTitleInput.value
+        );
 
-        projectTitleInput.setCustomValidity("Project title cannot be empty.");
+        if (!validationMessage) return;
+
+        projectTitleInput.setCustomValidity(validationMessage);
 
         requestAnimationFrame(() => {
-            if (normalizeProjectName(projectTitleInput.value)) return;
+            const currentValidationMessage = getProjectTitleValidationMessage(
+                projectTitleInput.value
+            );
 
+            if (!currentValidationMessage) return;
+
+            projectTitleInput.setCustomValidity(currentValidationMessage);
             projectTitleInput.focus();
             projectTitleInput.reportValidity();
+            projectTitleInput.select();
         });
     });
     projectTitleInput.addEventListener("keydown", (event) => {
@@ -300,7 +328,22 @@ function focusNewProjectTitle() {
 }
 
 document.querySelector(".back")?.addEventListener("click", () => {
+    if (!renameBoard(projectTitleInput?.value || "")) return;
+
+    allowBoardNavigation = true;
     window.location.href = "index.html";
+});
+
+window.addEventListener("beforeunload", (event) => {
+    if (
+        allowBoardNavigation ||
+        renameBoard(projectTitleInput?.value || BOARD_STORAGE_KEY)
+    ) {
+        return;
+    }
+
+    event.preventDefault();
+    event.returnValue = "";
 });
 
 function getRandomListColour() {
