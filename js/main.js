@@ -3,6 +3,7 @@ const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
 const ACTIVE_BOARD_STORAGE_KEY = "lockt:active-kanban-project";
 const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
 const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
+const NEW_PROJECT_FOCUS_STORAGE_KEY = "lockt:new-kanban-project";
 const creationDateFormatter = new Intl.DateTimeFormat("en-NZ", {
     day: "numeric",
     month: "short",
@@ -25,6 +26,19 @@ function readProjectNames() {
     } catch (error) {
         console.warn("Unable to read saved project names", error);
         return [];
+    }
+}
+
+function saveProjectNames(projectNames) {
+    try {
+        window.localStorage.setItem(
+            PROJECTS_STORAGE_KEY,
+            JSON.stringify([...new Set(projectNames)])
+        );
+        return true;
+    } catch (error) {
+        console.warn("Unable to save project names", error);
+        return false;
     }
 }
 
@@ -81,7 +95,7 @@ function looksLikeBoardStorageValue(value) {
 }
 
 function getKanbanProjectNames() {
-    const projectNames = new Set([DEFAULT_BOARD_STORAGE_KEY]);
+    const projectNames = new Set();
 
     readProjectNames().forEach((projectName) => {
         projectNames.add(projectName);
@@ -100,11 +114,56 @@ function getKanbanProjectNames() {
         }
     }
 
+    if (
+        projectNames.size === 0 ||
+        window.localStorage.getItem(DEFAULT_BOARD_STORAGE_KEY) ||
+        window.localStorage.getItem(LEGACY_BOARD_STORAGE_KEY)
+    ) {
+        projectNames.add(DEFAULT_BOARD_STORAGE_KEY);
+    }
+
     return [...projectNames];
 }
 
 function selectProject(projectName) {
     window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, projectName);
+}
+
+function getAvailableProjectName() {
+    const projectNames = new Set(getKanbanProjectNames());
+    const baseName = "Untitled Project";
+
+    if (!projectNames.has(baseName)) {
+        return baseName;
+    }
+
+    let suffix = 2;
+
+    while (projectNames.has(`${baseName} ${suffix}`)) {
+        suffix += 1;
+    }
+
+    return `${baseName} ${suffix}`;
+}
+
+function createNewProject() {
+    const projectName = getAvailableProjectName();
+
+    if (!saveProjectNames([...readProjectNames(), projectName])) return;
+
+    getProjectCreationDate(projectName);
+    selectProject(projectName);
+
+    try {
+        window.sessionStorage.setItem(
+            NEW_PROJECT_FOCUS_STORAGE_KEY,
+            projectName
+        );
+    } catch (error) {
+        console.warn("Unable to mark the new project for editing", error);
+    }
+
+    window.location.href = `kanban.html?project=${encodeURIComponent(projectName)}`;
 }
 
 function createProjectCard(projectName) {
@@ -147,6 +206,10 @@ function renderKanbanProjects() {
 
 document.querySelector(".back")?.addEventListener("click", () => {
     window.history.back();
+});
+
+document.querySelector(".new-project")?.addEventListener("click", () => {
+    createNewProject();
 });
 
 renderKanbanProjects();

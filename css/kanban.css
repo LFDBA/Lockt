@@ -16,6 +16,30 @@
   transform: rotate(20deg) scale(1.08);
 }
 
+.project-title {
+  width: min(60vw, 720px);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  outline: none;
+  background: transparent;
+  color: #3b2b23;
+  font: inherit;
+  font-size: 60px;
+  font-weight: 400;
+  text-align: center;
+  text-shadow: 2px 3px 4px rgba(0,0,0,0.25);
+  transition: border-color 0.14s ease, background-color 0.14s ease;
+}
+
+.project-title:hover {
+  border-bottom-color: rgba(59, 43, 35, 0.2);
+}
+
+.project-title:focus {
+  border-bottom-color: rgba(59, 43, 35, 0.5);
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
 .lists-row {
   display: flex;
   align-items: flex-start;
@@ -155,6 +179,7 @@
 }
 
 .add-card:focus-visible,
+.project-title:focus-visible,
 .card-input:focus-visible,
 .card-date-input:focus-visible,
 .card-submit:focus-visible,

@@ -4,6 +4,7 @@ const listsRow = document.querySelector(".lists-row");
 const trash = document.querySelector("#trash");
 const alertBox = document.querySelector("#alert");
 const cardEditorBackdrop = document.querySelector("#card-editor-backdrop");
+const projectTitleInput = document.querySelector(".project-title");
 
 let draggedCard = null;
 let draggedFromList = null;
@@ -25,7 +26,8 @@ const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
 const ACTIVE_BOARD_STORAGE_KEY = "lockt:active-kanban-project";
 const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
 const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
-const BOARD_STORAGE_KEY = getSelectedBoardStorageKey();
+const NEW_PROJECT_FOCUS_STORAGE_KEY = "lockt:new-kanban-project";
+let BOARD_STORAGE_KEY = getSelectedBoardStorageKey();
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric"
@@ -107,6 +109,35 @@ function rememberProjectName(projectName) {
     }
 }
 
+function moveProjectCreationDate(previousName, nextName) {
+    try {
+        const savedMetadata = JSON.parse(
+            window.localStorage.getItem(PROJECT_METADATA_STORAGE_KEY) || "{}"
+        );
+        const metadata =
+            savedMetadata &&
+            typeof savedMetadata === "object" &&
+            !Array.isArray(savedMetadata)
+                ? savedMetadata
+                : {};
+        const creationMetadata = metadata[previousName] || {
+            createdAt: new Date().toISOString()
+        };
+        const metadataWithoutPreviousName = { ...metadata };
+
+        delete metadataWithoutPreviousName[previousName];
+        window.localStorage.setItem(
+            PROJECT_METADATA_STORAGE_KEY,
+            JSON.stringify({
+                ...metadataWithoutPreviousName,
+                [nextName]: creationMetadata
+            })
+        );
+    } catch (error) {
+        console.warn("Unable to rename project metadata", error);
+    }
+}
+
 function getSelectedBoardStorageKey() {
     const projectFromUrl = normalizeProjectName(
         new URLSearchParams(window.location.search).get("project")
@@ -128,11 +159,144 @@ function getSelectedBoardStorageKey() {
 function syncBoardTitle() {
     document.title = `${BOARD_STORAGE_KEY} Board`;
 
-    const title = document.querySelector(".top-bar h1");
-
-    if (title) {
-        title.textContent = BOARD_STORAGE_KEY;
+    if (projectTitleInput) {
+        projectTitleInput.value = BOARD_STORAGE_KEY;
+        projectTitleInput.setCustomValidity("");
     }
+}
+
+function rejectProjectTitle(message) {
+    if (!projectTitleInput) return;
+
+    projectTitleInput.setCustomValidity(message);
+    projectTitleInput.reportValidity();
+    projectTitleInput.focus();
+    projectTitleInput.select();
+}
+
+function renameBoard(nextProjectName) {
+    const normalizedProjectName = normalizeProjectName(nextProjectName);
+
+    if (!normalizedProjectName) {
+        rejectProjectTitle("Project title cannot be empty.");
+        return;
+    }
+
+    if (normalizedProjectName === BOARD_STORAGE_KEY) {
+        syncBoardTitle();
+        return;
+    }
+
+    if (
+        normalizedProjectName.startsWith("lockt:") ||
+        normalizedProjectName === LEGACY_BOARD_STORAGE_KEY
+    ) {
+        rejectProjectTitle("That project title is reserved.");
+        return;
+    }
+
+    if (
+        readProjectNames().includes(normalizedProjectName) ||
+        window.localStorage.getItem(normalizedProjectName) !== null
+    ) {
+        rejectProjectTitle("A project with that title already exists.");
+        return;
+    }
+
+    const previousProjectName = BOARD_STORAGE_KEY;
+
+    try {
+        window.localStorage.setItem(
+            normalizedProjectName,
+            JSON.stringify(getBoardState())
+        );
+        window.localStorage.removeItem(previousProjectName);
+
+        if (previousProjectName === DEFAULT_BOARD_STORAGE_KEY) {
+            window.localStorage.removeItem(LEGACY_BOARD_STORAGE_KEY);
+        }
+
+        saveProjectNames([
+            ...readProjectNames().filter((name) => name !== previousProjectName),
+            normalizedProjectName
+        ]);
+        moveProjectCreationDate(previousProjectName, normalizedProjectName);
+
+        BOARD_STORAGE_KEY = normalizedProjectName;
+        window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, BOARD_STORAGE_KEY);
+
+        const nextUrl = new URL(window.location.href);
+        nextUrl.searchParams.set("project", BOARD_STORAGE_KEY);
+        window.history.replaceState(null, "", nextUrl);
+        syncBoardTitle();
+    } catch (error) {
+        console.warn("Unable to rename project", error);
+        rejectProjectTitle("Unable to rename this project.");
+    }
+}
+
+function setupProjectTitleEditor() {
+    if (!projectTitleInput) return;
+
+    projectTitleInput.addEventListener("input", () => {
+        projectTitleInput.setCustomValidity("");
+    });
+    projectTitleInput.addEventListener("change", () => {
+        renameBoard(projectTitleInput.value);
+    });
+    projectTitleInput.addEventListener("blur", () => {
+        if (normalizeProjectName(projectTitleInput.value)) return;
+
+        projectTitleInput.setCustomValidity("Project title cannot be empty.");
+
+        requestAnimationFrame(() => {
+            if (normalizeProjectName(projectTitleInput.value)) return;
+
+            projectTitleInput.focus();
+            projectTitleInput.reportValidity();
+        });
+    });
+    projectTitleInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") {
+            event.preventDefault();
+            projectTitleInput.blur();
+        }
+
+        if (event.key === "Escape") {
+            event.preventDefault();
+            syncBoardTitle();
+            projectTitleInput.blur();
+        }
+    });
+}
+
+function focusNewProjectTitle() {
+    if (!projectTitleInput) return;
+
+    let newProjectName = "";
+
+    try {
+        newProjectName = window.sessionStorage.getItem(
+            NEW_PROJECT_FOCUS_STORAGE_KEY
+        );
+    } catch (error) {
+        console.warn("Unable to read the new project editing state", error);
+    }
+
+    if (newProjectName !== BOARD_STORAGE_KEY) {
+        return;
+    }
+
+    try {
+        window.sessionStorage.removeItem(NEW_PROJECT_FOCUS_STORAGE_KEY);
+    } catch (error) {
+        console.warn("Unable to clear the new project editing state", error);
+    }
+
+    requestAnimationFrame(() => {
+        projectTitleInput.focus();
+        projectTitleInput.select();
+    });
 }
 
 document.querySelector(".back")?.addEventListener("click", () => {
@@ -1129,6 +1293,8 @@ function initializeBoard() {
     rememberProjectName(BOARD_STORAGE_KEY);
     window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, BOARD_STORAGE_KEY);
     syncBoardTitle();
+    setupProjectTitleEditor();
+    focusNewProjectTitle();
 
     const savedBoardState = readBoardState();
 
