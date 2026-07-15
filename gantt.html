@@ -3,11 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Gantt Chart</title>
     <link rel="stylesheet" href="css/gantt.css"/>
     <link rel="stylesheet" href="css/base.css"/>
 </head>
 <body>
-    
+    <div class="content gantt-page">
+        <div class="top-bar">
+            <div class="back">←</div>
+            <input
+                class="project-title"
+                type="text"
+                value="My Project"
+                maxlength="21"
+                minlength="1"
+                aria-label="Project title"
+                spellcheck="false"
+            >
+            <button
+                class="settings kanban-settings-button"
+                type="button"
+                aria-label="Kanban settings"
+                aria-expanded="false"
+                aria-controls="kanban-settings-panel"
+            >⚙</button>
+        </div>
+
+        <main class="gantt-chart" aria-label="Project Gantt chart">
+            <div class="gantt-groups"></div>
+        </main>
+    </div>
+
+    <script src="js/gantt.js"></script>
 </body>
 </html>

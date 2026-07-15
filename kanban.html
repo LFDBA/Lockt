@@ -24,7 +24,29 @@
                 aria-label="Project title"
                 spellcheck="false"
             >
-            <div class="settings">⚙</div>
+            <button
+                class="settings kanban-settings-button"
+                type="button"
+                aria-label="Kanban settings"
+                aria-expanded="false"
+                aria-controls="kanban-settings-panel"
+            >⚙</button>
+        </div>
+
+        <div class="kanban-settings-panel" id="kanban-settings-panel" hidden>
+            <label for="urgency-threshold">Urgency threshold</label>
+            <div class="urgency-threshold-field">
+                <input
+                    id="urgency-threshold"
+                    type="number"
+                    min="0"
+                    max="365"
+                    step="1"
+                    inputmode="numeric"
+                >
+                <span>days</span>
+            </div>
+            <p>Tasks due within this many days are marked urgent.</p>
         </div>
 
         <div class="lists-row">

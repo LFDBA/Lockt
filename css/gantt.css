@@ -1,0 +1,451 @@
+* {
+  box-sizing: border-box;
+}
+
+.content.gantt-page {
+  min-width: 860px;
+  padding: 20px 36px 44px;
+}
+
+.gantt-page .top-bar {
+  margin-bottom: 12px;
+}
+
+.gantt-back {
+  color: inherit;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.gantt-project-title {
+  max-width: 65vw;
+  overflow: hidden;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gantt-settings {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.gantt-back:focus-visible,
+.gantt-settings:focus-visible,
+.group-toggle:focus-visible,
+.add-task:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.5);
+  outline-offset: 4px;
+}
+
+.gantt-chart {
+  --sidebar-width: 145px;
+  --task-row-height: 46px;
+  --week-count: 4;
+  --timeline-width: max(680px, calc(var(--week-count) * 172px));
+  width: 100%;
+  min-width: 0;
+}
+
+.timeline-scroll {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+  scrollbar-color: rgba(59, 43, 35, 0.35) transparent;
+  scrollbar-width: thin;
+}
+
+.timeline-scroll::-webkit-scrollbar {
+  height: 10px;
+}
+
+.timeline-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(59, 43, 35, 0.3);
+}
+
+.week-labels {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(var(--week-count), minmax(0, 1fr));
+  min-height: 42px;
+  align-items: center;
+  font-size: 27px;
+  text-align: center;
+}
+
+.list-week-labels {
+  position: absolute;
+  z-index: 3;
+  top: -5px;
+  right: 0;
+  left: 0;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.gantt-group:hover .list-week-labels,
+.gantt-group:focus-within .list-week-labels {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.week-label {
+  display: grid;
+  line-height: 1.05;
+}
+
+.week-label strong {
+  font-weight: 400;
+}
+
+.week-label small {
+  margin-top: 4px;
+  color: #76665d;
+  font-size: 14px;
+}
+
+.gantt-groups {
+  width: 100%;
+}
+
+.gantt-group {
+  --group-colour: #b8a4cc;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+
+.group-sidebar {
+  position: relative;
+  z-index: 5;
+  min-height: calc(103px + var(--task-count) * var(--task-row-height));
+  padding: 10px 10px 8px;
+  border-radius: 14px;
+  background: var(--group-colour);
+  box-shadow: 0 5px 11px rgba(0, 0, 0, 0.2);
+  transition: min-height 0.18s ease;
+}
+
+.group-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 35px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: #3b2b23;
+  cursor: pointer;
+  font: inherit;
+  font-size: 24px;
+  text-align: left;
+}
+
+.group-chevron {
+  width: 11px;
+  height: 11px;
+  margin: -5px 2px 0 12px;
+  border-right: 3px solid #111;
+  border-bottom: 3px solid #111;
+  transform: rotate(45deg);
+  transition: transform 0.18s ease, margin 0.18s ease;
+}
+
+.task-labels {
+  display: grid;
+  grid-auto-rows: var(--task-row-height);
+}
+
+.task-label {
+  display: flex;
+  min-width: 0;
+  height: 38px;
+  align-items: center;
+  align-self: center;
+  padding: 0 14px;
+  border: 3px solid #c4d9bd;
+  border-radius: 18px;
+  background: #f3f0ea;
+  box-shadow: 0 2px 4px rgba(59, 43, 35, 0.1);
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-label.is-unscheduled {
+  border-style: dashed;
+  opacity: 0.8;
+}
+
+.add-task {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 3px 12px 0;
+  border: 0;
+  background: transparent;
+  color: #3b2b23;
+  cursor: pointer;
+  font: inherit;
+  font-size: 19px;
+  text-align: left;
+}
+
+.add-task:hover {
+  transform: translateX(2px);
+}
+
+.group-timeline-scroll {
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  margin-top: -5px;
+  padding-top: 5px;
+  padding-bottom: 8px;
+}
+
+.group-timeline {
+  position: relative;
+  width: var(--timeline-width);
+  min-height: calc(103px + var(--task-count) * var(--task-row-height));
+  overflow: hidden;
+  transition: min-height 0.18s ease, opacity 0.18s ease;
+}
+
+.group-timeline::before {
+  position: absolute;
+  z-index: 0;
+  top: 45px;
+  right: 0;
+  left: 0;
+  height: calc(var(--task-count) * var(--task-row-height));
+  border-radius: 0 14px 14px 0;
+  background-color: var(--group-colour);
+  background-image:
+    linear-gradient(var(--group-colour), var(--group-colour)),
+    linear-gradient(var(--group-colour), var(--group-colour)),
+    linear-gradient(
+      to right,
+      transparent calc(100% - 2px),
+      rgba(38, 31, 27, 0.85) calc(100% - 2px)
+    ),
+    linear-gradient(
+      to bottom,
+      transparent calc(var(--task-row-height) - 2px),
+      rgba(38, 31, 27, 0.85) calc(var(--task-row-height) - 2px)
+    );
+  background-position:
+    left bottom,
+    right top,
+    left top,
+    left top;
+  background-repeat:
+    no-repeat,
+    no-repeat,
+    repeat,
+    repeat;
+  background-size:
+    100% 2px,
+    2px 100%,
+    calc(100% / var(--week-count)) 100%,
+    100% var(--task-row-height);
+  content: "";
+}
+
+.gantt-bar {
+  position: absolute;
+  z-index: 4;
+  top: calc(49px + var(--row) * var(--task-row-height));
+  left: calc(var(--start-percent) + 7px);
+  width: max(34px, calc(var(--span-percent) - 14px));
+  height: 30px;
+  border: 2px solid rgba(230, 233, 224, 0.75);
+  border-radius: 999px;
+  background: var(--bar-colour, #93aaa2);
+  box-shadow: 0 2px 3px rgba(59, 43, 35, 0.18);
+  cursor: grab;
+  touch-action: none;
+}
+
+.gantt-bar.is-dragging {
+  cursor: grabbing;
+}
+
+.gantt-bar:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.55);
+  outline-offset: 3px;
+}
+
+.task-drag-surface {
+  position: absolute;
+  z-index: 1;
+  inset: 0 12px;
+  cursor: grab;
+}
+
+.gantt-bar.is-dragging .task-drag-surface {
+  cursor: grabbing;
+}
+
+.task-date-tooltip {
+  position: absolute;
+  z-index: 4;
+  bottom: calc(100% + 8px);
+  display: none;
+  width: max-content;
+  max-width: 190px;
+  padding: 5px 9px;
+  border-radius: 8px;
+  background: #3b2b23;
+  color: #f8f6f1;
+  box-shadow: 0 4px 10px rgba(59, 43, 35, 0.22);
+  font-size: 14px;
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.task-date-tooltip.is-visible {
+  display: block;
+}
+
+.task-date-tooltip.is-start {
+  left: 0;
+}
+
+.task-date-tooltip.is-end {
+  right: 0;
+}
+
+.task-date-tooltip.is-centre {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.task-resize-handle {
+  position: absolute;
+  z-index: 2;
+  top: 2px;
+  bottom: 2px;
+  width: 14px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: ew-resize;
+  opacity: 0;
+  touch-action: none;
+  transition: opacity 0.12s ease;
+}
+
+.task-resize-handle::after {
+  position: absolute;
+  top: 7px;
+  bottom: 7px;
+  left: 6px;
+  width: 2px;
+  border-radius: 999px;
+  background: rgba(59, 43, 35, 0.45);
+  content: "";
+}
+
+.task-resize-handle.is-start {
+  left: 0;
+}
+
+.task-resize-handle.is-end {
+  right: 0;
+}
+
+.gantt-bar:hover .task-resize-handle,
+.gantt-bar.is-resizing .task-resize-handle,
+.task-resize-handle:focus-visible {
+  opacity: 1;
+}
+
+.task-resize-handle:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.55);
+  outline-offset: 2px;
+}
+
+body.gantt-resizing {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+body.gantt-dragging {
+  cursor: grabbing;
+  user-select: none;
+}
+
+.gantt-bar.is-urgent {
+  --bar-colour: #d5a09a;
+}
+
+.gantt-bar.is-complete {
+  --bar-colour: #eee8dd;
+}
+
+.task-connector {
+  position: absolute;
+  z-index: 1;
+  top: calc(64px + var(--top-row) * var(--task-row-height));
+  left: calc(var(--from-percent) - 7px);
+  width: calc(var(--to-percent) - var(--from-percent) + 14px);
+  height: var(--task-row-height);
+  overflow: visible;
+  transition: opacity 0.12s ease;
+  pointer-events: none;
+}
+
+body.gantt-resizing .task-connector,
+body.gantt-dragging .task-connector {
+  opacity: 0;
+}
+
+.task-connector path {
+  fill: none;
+  stroke: var(--connector-colour, #93aaa2);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.gantt-group.is-collapsed {
+  grid-template-columns: var(--sidebar-width) 1fr;
+}
+
+.gantt-group.is-collapsed .group-sidebar {
+  min-height: 52px;
+  padding-bottom: 7px;
+}
+
+.gantt-group.is-collapsed .group-chevron {
+  margin-top: 5px;
+  transform: rotate(225deg);
+}
+
+.gantt-group.is-collapsed .task-labels,
+.gantt-group.is-collapsed .add-task,
+.gantt-group.is-collapsed .group-timeline-scroll {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .content.gantt-page {
+    padding-right: 28px;
+    padding-left: 28px;
+  }
+}

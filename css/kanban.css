@@ -6,6 +6,9 @@
   box-sizing: border-box;
 }
 
+.content {
+  position: relative;
+}
 
 .back,
 .settings {
@@ -16,29 +19,72 @@
   transform: rotate(20deg) scale(1.08);
 }
 
-.project-title {
-  width: min(60vw, 720px);
+.kanban-settings-button {
+  padding: 0;
   border: 0;
-  border-bottom: 2px solid transparent;
-  outline: none;
   background: transparent;
-  color: #3b2b23;
+  color: inherit;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.kanban-settings-button:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.5);
+  outline-offset: 4px;
+}
+
+.kanban-settings-panel {
+  position: absolute;
+  z-index: 1100;
+  top: 112px;
+  right: 48px;
+  width: 280px;
+  padding: 18px 20px;
+  border: 2px solid rgba(59, 43, 35, 0.16);
+  border-radius: 16px;
+  background: #f8f6f1;
+  box-shadow: 0 12px 28px rgba(59, 43, 35, 0.2);
+}
+
+.kanban-settings-panel[hidden] {
+  display: none;
+}
+
+.kanban-settings-panel label {
+  display: block;
+  margin-bottom: 9px;
+  font-size: 22px;
+}
+
+.urgency-threshold-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.urgency-threshold-field input {
+  width: 90px;
+  padding: 7px 10px;
+  border: 2px solid rgba(59, 43, 35, 0.2);
+  border-radius: 10px;
+  background: #fff;
+  color: inherit;
   font: inherit;
-  font-size: 60px;
-  font-weight: 400;
-  text-align: center;
-  text-shadow: 2px 3px 4px rgba(0,0,0,0.25);
-  transition: border-color 0.14s ease, background-color 0.14s ease;
+  font-size: 19px;
 }
 
-.project-title:hover {
-  border-bottom-color: rgba(59, 43, 35, 0.2);
+.urgency-threshold-field input:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.45);
+  outline-offset: 2px;
 }
 
-.project-title:focus {
-  border-bottom-color: rgba(59, 43, 35, 0.5);
-  background-color: rgba(255, 255, 255, 0.25);
+.kanban-settings-panel p {
+  margin: 10px 0 0;
+  color: #76665d;
+  font-size: 15px;
+  line-height: 1.25;
 }
+
 
 .lists-row {
   display: flex;

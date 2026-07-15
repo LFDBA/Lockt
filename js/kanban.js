@@ -5,6 +5,9 @@ const trash = document.querySelector("#trash");
 const alertBox = document.querySelector("#alert");
 const cardEditorBackdrop = document.querySelector("#card-editor-backdrop");
 const projectTitleInput = document.querySelector(".project-title");
+const settingsButton = document.querySelector(".kanban-settings-button");
+const settingsPanel = document.querySelector(".kanban-settings-panel");
+const urgencyThresholdInput = document.querySelector("#urgency-threshold");
 
 let draggedCard = null;
 let draggedFromList = null;
@@ -27,8 +30,11 @@ const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
 const ACTIVE_BOARD_STORAGE_KEY = "lockt:active-kanban-project";
 const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
 const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
+const PROJECT_SETTINGS_STORAGE_KEY = "lockt:kanban-project-settings";
 const NEW_PROJECT_FOCUS_STORAGE_KEY = "lockt:new-kanban-project";
+const DEFAULT_URGENCY_THRESHOLD_DAYS = 7;
 let BOARD_STORAGE_KEY = getSelectedBoardStorageKey();
+let urgencyThresholdDays = getProjectUrgencyThreshold(BOARD_STORAGE_KEY);
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric"
@@ -139,6 +145,69 @@ function moveProjectCreationDate(previousName, nextName) {
     }
 }
 
+function readProjectSettings() {
+    try {
+        const settings = JSON.parse(
+            window.localStorage.getItem(PROJECT_SETTINGS_STORAGE_KEY) || "{}"
+        );
+
+        return settings && typeof settings === "object" && !Array.isArray(settings)
+            ? settings
+            : {};
+    } catch (error) {
+        console.warn("Unable to read project settings", error);
+        return {};
+    }
+}
+
+function getProjectUrgencyThreshold(projectName) {
+    const savedThreshold = readProjectSettings()[projectName]?.urgencyThresholdDays;
+
+    return Number.isInteger(savedThreshold) && savedThreshold >= 0
+        ? Math.min(365, savedThreshold)
+        : DEFAULT_URGENCY_THRESHOLD_DAYS;
+}
+
+function saveProjectUrgencyThreshold(projectName, thresholdDays) {
+    try {
+        const settings = readProjectSettings();
+
+        window.localStorage.setItem(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            JSON.stringify({
+                ...settings,
+                [projectName]: {
+                    ...(settings[projectName] || {}),
+                    urgencyThresholdDays: thresholdDays
+                }
+            })
+        );
+    } catch (error) {
+        console.warn("Unable to save the urgency threshold", error);
+    }
+}
+
+function moveProjectSettings(previousName, nextName) {
+    try {
+        const settings = readProjectSettings();
+        const currentProjectSettings = settings[previousName];
+
+        if (!currentProjectSettings) return;
+
+        const settingsWithoutPreviousName = { ...settings };
+        delete settingsWithoutPreviousName[previousName];
+        window.localStorage.setItem(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            JSON.stringify({
+                ...settingsWithoutPreviousName,
+                [nextName]: currentProjectSettings
+            })
+        );
+    } catch (error) {
+        console.warn("Unable to rename project settings", error);
+    }
+}
+
 function getSelectedBoardStorageKey() {
     const projectFromUrl = normalizeProjectName(
         new URLSearchParams(window.location.search).get("project")
@@ -235,6 +304,7 @@ function renameBoard(nextProjectName) {
             normalizedProjectName
         ]);
         moveProjectCreationDate(previousProjectName, normalizedProjectName);
+        moveProjectSettings(previousProjectName, normalizedProjectName);
 
         BOARD_STORAGE_KEY = normalizedProjectName;
         window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, BOARD_STORAGE_KEY);
@@ -324,6 +394,80 @@ function focusNewProjectTitle() {
     requestAnimationFrame(() => {
         projectTitleInput.focus();
         projectTitleInput.select();
+    });
+}
+
+function closeKanbanSettings() {
+    if (!settingsPanel || !settingsButton) return;
+
+    settingsPanel.hidden = true;
+    settingsButton.setAttribute("aria-expanded", "false");
+}
+
+function setupKanbanSettings() {
+    if (!settingsPanel || !settingsButton || !urgencyThresholdInput) return;
+
+    urgencyThresholdInput.value = String(urgencyThresholdDays);
+
+    settingsButton.addEventListener("click", () => {
+        const willOpen = settingsPanel.hidden;
+
+        settingsPanel.hidden = !willOpen;
+        settingsButton.setAttribute("aria-expanded", String(willOpen));
+
+        if (willOpen) {
+            urgencyThresholdInput.focus();
+            urgencyThresholdInput.select();
+        }
+    });
+
+    urgencyThresholdInput.addEventListener("input", () => {
+        if (urgencyThresholdInput.value === "") return;
+
+        const parsedThreshold = Number(urgencyThresholdInput.value);
+
+        if (!Number.isFinite(parsedThreshold)) return;
+
+        urgencyThresholdDays = Math.max(
+            0,
+            Math.min(365, Math.round(parsedThreshold))
+        );
+        saveProjectUrgencyThreshold(
+            BOARD_STORAGE_KEY,
+            urgencyThresholdDays
+        );
+        refreshCardUrgency();
+        saveBoardState();
+    });
+
+    urgencyThresholdInput.addEventListener("change", () => {
+        urgencyThresholdInput.value = String(urgencyThresholdDays);
+    });
+
+    document.addEventListener("pointerdown", (event) => {
+        if (
+            settingsPanel.hidden ||
+            settingsPanel.contains(event.target) ||
+            settingsButton.contains(event.target)
+        ) {
+            return;
+        }
+
+        closeKanbanSettings();
+    });
+
+    document.addEventListener("keydown", (event) => {
+        if (event.key !== "Escape" || settingsPanel.hidden) return;
+
+        closeKanbanSettings();
+        settingsButton.focus();
+    });
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState !== "visible") return;
+
+        refreshCardUrgency();
+        saveBoardState();
     });
 }
 
@@ -445,6 +589,7 @@ function getCardData(card) {
 
     return {
         title: getCardTitleText(card),
+        startDateValue: normalizeDateValue(card.dataset.startDateValue || ""),
         dateValue,
         dateLabel,
         isEmptyDate:
@@ -482,6 +627,7 @@ function getBoardState() {
 
 function saveBoardState() {
     try {
+        refreshCardUrgency();
         rememberProjectName(BOARD_STORAGE_KEY);
         window.localStorage.setItem(
             BOARD_STORAGE_KEY,
@@ -596,6 +742,31 @@ function getCardDateValue(card) {
     return derivedDateValue;
 }
 
+function shouldCardBeUrgent(card) {
+    const dateValue = getCardDateValue(card);
+
+    if (!dateValue) return false;
+
+    const dueDate = new Date(`${dateValue}T00:00:00`);
+    const today = new Date();
+
+    if (Number.isNaN(dueDate.getTime())) return false;
+
+    today.setHours(0, 0, 0, 0);
+
+    const daysUntilDue = Math.ceil(
+        (dueDate.getTime() - today.getTime()) / (24 * 60 * 60 * 1000)
+    );
+
+    return daysUntilDue <= urgencyThresholdDays;
+}
+
+function refreshCardUrgency() {
+    document.querySelectorAll(".card").forEach((card) => {
+        card.classList.toggle("urgent", shouldCardBeUrgent(card));
+    });
+}
+
 function renderCardDisplayContent(card, cardData = {}) {
     const title = typeof cardData.title === "string" ? cardData.title.trim() : "";
     const fallbackDateLabel =
@@ -605,12 +776,23 @@ function renderCardDisplayContent(card, cardData = {}) {
     const dateValue =
         normalizeDateValue(cardData.dateValue) ||
         deriveDateValueFromLabel(fallbackDateLabel);
+    const startDateValue = normalizeDateValue(
+        typeof cardData.startDateValue === "string"
+            ? cardData.startDateValue
+            : card.dataset.startDateValue || ""
+    );
     const options = document.createElement("div");
     const description = document.createElement("p");
     const date = document.createElement("div");
 
     if (typeof cardData.urgent === "boolean") {
         card.classList.toggle("urgent", cardData.urgent);
+    }
+
+    if (startDateValue) {
+        card.dataset.startDateValue = startDateValue;
+    } else {
+        delete card.dataset.startDateValue;
     }
 
     options.className = "card-options";
@@ -1329,6 +1511,7 @@ function applyBoardState(boardState) {
         listsRow.insertBefore(list, addListButton);
     });
 
+    refreshCardUrgency();
     actionHistory = [];
 }
 
@@ -1337,6 +1520,7 @@ function initializeBoard() {
     window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, BOARD_STORAGE_KEY);
     syncBoardTitle();
     setupProjectTitleEditor();
+    setupKanbanSettings();
     focusNewProjectTitle();
 
     const savedBoardState = readBoardState();
@@ -1351,6 +1535,7 @@ function initializeBoard() {
         setupCard(card);
     });
     document.querySelectorAll(".list").forEach(setupList);
+    refreshCardUrgency();
     saveBoardState();
 }
 
