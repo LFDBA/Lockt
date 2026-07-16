@@ -625,7 +625,7 @@ function removeProjectFromObjectStorage(storageKey, projectName) {
     }
 }
 
-function deleteProject(projectName) {
+async function deleteProject(projectName) {
     try {
         window.localStorage.setItem(HOME_INITIALIZED_STORAGE_KEY, "true");
         window.localStorage.removeItem(projectName);
@@ -660,6 +660,8 @@ function deleteProject(projectName) {
         ) {
             window.sessionStorage.removeItem(NEW_PROJECT_FOCUS_STORAGE_KEY);
         }
+
+        await window.LocktWhiteboardStorage?.remove(projectName);
     } catch (error) {
         console.warn("Unable to delete project", error);
         return;
@@ -966,7 +968,7 @@ cancelProjectDeletion?.addEventListener("click", () => {
     deleteProjectDialog?.close();
 });
 
-deleteProjectForm?.addEventListener("submit", (event) => {
+deleteProjectForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     if (
@@ -979,7 +981,7 @@ deleteProjectForm?.addEventListener("submit", (event) => {
     const projectName = pendingDeletionProjectName;
 
     deleteProjectDialog?.close();
-    deleteProject(projectName);
+    await deleteProject(projectName);
 });
 
 deleteProjectDialog?.addEventListener("click", (event) => {

@@ -15,6 +15,7 @@
     const titleInput = document.querySelector(".project-title");
     const settingsButton = document.querySelector(".kanban-settings-button");
     const settingsPanel = document.querySelector(".kanban-settings-panel");
+    const renameButton = document.querySelector(".rename-project-button");
     const urgencyInput = document.querySelector("#urgency-threshold");
     const backgroundInput = document.querySelector("#board-background-image");
     const removeBackgroundButton = document.querySelector(
@@ -203,6 +204,7 @@
                 { createdAt: new Date().toISOString() }
             );
             moveObjectRecord(PROJECT_SETTINGS_KEY, previousName, nextName);
+            void window.LocktWhiteboardStorage?.move(previousName, nextName);
 
             projectName = nextName;
             window.localStorage.setItem(ACTIVE_PROJECT_KEY, projectName);
@@ -369,7 +371,7 @@
         saveObjectStorage(storageKey, nextRecords);
     }
 
-    function deleteProject() {
+    async function deleteProject() {
         try {
             window.localStorage.setItem(HOME_INITIALIZED_KEY, "true");
             window.localStorage.removeItem(projectName);
@@ -395,6 +397,8 @@
             ) {
                 window.sessionStorage.removeItem(NEW_PROJECT_FOCUS_KEY);
             }
+
+            await window.LocktWhiteboardStorage?.remove(projectName);
         } catch (error) {
             console.warn("Unable to delete project", error);
             return;
@@ -447,6 +451,12 @@
         if (!settingsPanel || !settingsButton || !urgencyInput) return;
 
         urgencyInput.value = String(urgencyDays);
+
+        renameButton?.addEventListener("click", () => {
+            closeSettings();
+            titleInput?.focus();
+            titleInput?.select();
+        });
 
         settingsButton.addEventListener("click", () => {
             const willOpen = settingsPanel.hidden;
@@ -569,13 +579,13 @@
             confirmDeletion.disabled = deleteConfirmation.value !== projectName;
         });
         cancelDeletion?.addEventListener("click", () => deleteDialog.close());
-        deleteForm.addEventListener("submit", (event) => {
+        deleteForm.addEventListener("submit", async (event) => {
             event.preventDefault();
 
             if (deleteConfirmation.value !== projectName) return;
 
             deleteDialog.close();
-            deleteProject();
+            await deleteProject();
         });
         deleteDialog.addEventListener("click", (event) => {
             if (event.target === deleteDialog) deleteDialog.close();

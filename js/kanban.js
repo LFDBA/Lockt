@@ -7,6 +7,7 @@ const cardEditorBackdrop = document.querySelector("#card-editor-backdrop");
 const projectTitleInput = document.querySelector(".project-title");
 const settingsButton = document.querySelector(".kanban-settings-button");
 const settingsPanel = document.querySelector(".kanban-settings-panel");
+const renameProjectButton = document.querySelector(".rename-project-button");
 const urgencyThresholdInput = document.querySelector("#urgency-threshold");
 const boardContent = document.querySelector(".content");
 const backgroundImageInput = document.querySelector("#board-background-image");
@@ -475,6 +476,10 @@ function renameBoard(nextProjectName) {
         ]);
         moveProjectCreationDate(previousProjectName, normalizedProjectName);
         moveProjectSettings(previousProjectName, normalizedProjectName);
+        void window.LocktWhiteboardStorage?.move(
+            previousProjectName,
+            normalizedProjectName
+        );
 
         BOARD_STORAGE_KEY = normalizedProjectName;
         window.localStorage.setItem(ACTIVE_BOARD_STORAGE_KEY, BOARD_STORAGE_KEY);
@@ -578,6 +583,12 @@ function setupKanbanSettings() {
     if (!settingsPanel || !settingsButton || !urgencyThresholdInput) return;
 
     urgencyThresholdInput.value = String(urgencyThresholdDays);
+
+    renameProjectButton?.addEventListener("click", () => {
+        closeKanbanSettings();
+        projectTitleInput?.focus();
+        projectTitleInput?.select();
+    });
 
     settingsButton.addEventListener("click", () => {
         const willOpen = settingsPanel.hidden;
@@ -712,7 +723,7 @@ function removeProjectFromObjectStorage(storageKey, projectName) {
     }
 }
 
-function deleteCurrentBoard() {
+async function deleteCurrentBoard() {
     const projectName = BOARD_STORAGE_KEY;
 
     try {
@@ -749,6 +760,8 @@ function deleteCurrentBoard() {
         ) {
             window.sessionStorage.removeItem(NEW_PROJECT_FOCUS_STORAGE_KEY);
         }
+
+        await window.LocktWhiteboardStorage?.remove(projectName);
     } catch (error) {
         console.warn("Unable to delete project", error);
         return;
@@ -791,13 +804,13 @@ function setupBoardDeletion() {
         deleteBoardDialog.close();
     });
 
-    deleteBoardForm.addEventListener("submit", (event) => {
+    deleteBoardForm.addEventListener("submit", async (event) => {
         event.preventDefault();
 
         if (deleteBoardConfirmation.value !== BOARD_STORAGE_KEY) return;
 
         deleteBoardDialog.close();
-        deleteCurrentBoard();
+        await deleteCurrentBoard();
     });
 
     deleteBoardDialog.addEventListener("click", (event) => {

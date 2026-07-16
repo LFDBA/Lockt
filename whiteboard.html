@@ -3,12 +3,193 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
-    <link rel="stylesheet" href="css/whiteboard.css"/>
-    <link rel="stylesheet" href="css/base.css"/>
-    <link rel="stylesheet" href="css/view-switcher.css"/>
+    <title>Whiteboard</title>
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/kanban.css">
+    <link rel="stylesheet" href="css/whiteboard.css">
+    <link rel="stylesheet" href="css/view-switcher.css">
 </head>
-<body>
+<body class="whiteboard-body">
+    <div class="content whiteboard-page">
+        <div class="top-bar whiteboard-top-bar">
+            <button class="back whiteboard-shell-button" type="button" aria-label="Back to projects">←</button>
+            <input
+                class="project-title"
+                type="text"
+                value="My Project"
+                maxlength="21"
+                minlength="1"
+                aria-label="Project title"
+                spellcheck="false"
+            >
+            <button
+                class="settings kanban-settings-button"
+                type="button"
+                aria-label="Board settings"
+                aria-expanded="false"
+                aria-controls="kanban-settings-panel"
+            >⚙</button>
+        </div>
+
+        <div class="kanban-settings-panel" id="kanban-settings-panel" hidden>
+            <div class="kanban-setting-section rename-project-setting">
+                <span class="kanban-setting-label">Project name</span>
+                <button class="rename-project-button" type="button">
+                    Rename project
+                </button>
+                <p>Edits the project title shown at the top.</p>
+            </div>
+
+            <label class="kanban-setting-label" for="urgency-threshold">Urgency threshold</label>
+            <div class="urgency-threshold-field">
+                <input
+                    id="urgency-threshold"
+                    type="number"
+                    min="0"
+                    max="365"
+                    step="1"
+                    inputmode="numeric"
+                >
+                <span>days</span>
+            </div>
+            <p>Tasks due within this many days are marked urgent.</p>
+
+            <div class="kanban-setting-section">
+                <span class="kanban-setting-label">Board background</span>
+                <div class="background-image-actions">
+                    <label class="background-image-upload" for="board-background-image">
+                        Upload image
+                    </label>
+                    <input
+                        id="board-background-image"
+                        class="background-image-input"
+                        type="file"
+                        accept="image/*"
+                    >
+                    <button class="remove-background-image" type="button" hidden>
+                        Remove
+                    </button>
+                </div>
+                <p class="background-image-status" aria-live="polite">
+                    Applies to Kanban, Gantt, and the fallback cover. The whiteboard always stays white.
+                </p>
+            </div>
+
+            <div class="kanban-setting-section kanban-danger-zone">
+                <span class="kanban-setting-label">Danger zone</span>
+                <button class="delete-board-button" type="button">
+                    Delete project
+                </button>
+            </div>
+        </div>
+
+        <main class="whiteboard-shell" aria-label="Project whiteboard">
+            <div class="whiteboard-toolbar" aria-label="Whiteboard tools">
+                <div class="toolbar-group tool-group" id="toolGroup" aria-label="Drawing tools"></div>
+
+                <span class="toolbar-divider" aria-hidden="true"></span>
+
+                <label class="toolbar-label stroke-control" for="strokeSize">
+                    <span>Size</span>
+                    <input class="toolbar-slider" id="strokeSize" type="range" min="1" max="24" step="1" value="4">
+                    <output id="strokeSizeReadout" for="strokeSize">4</output>
+                </label>
+
+                <div class="toolbar-group color-palette" id="colorPalette" aria-label="Ink colour"></div>
+
+                <div class="toolbar-group highlighter-controls" id="highlighterControls" hidden>
+                    <div class="toolbar-group color-palette" id="highlighterPalette" aria-label="Highlighter colour"></div>
+                    <label class="toolbar-label" for="highlighterOpacity">
+                        <span>Opacity</span>
+                        <input class="toolbar-slider" id="highlighterOpacity" type="range" min="0.04" max="0.4" step="0.02" value="0.12">
+                        <output id="highlighterOpacityReadout" for="highlighterOpacity">12%</output>
+                    </label>
+                </div>
+
+                <div class="toolbar-group sticky-controls" id="stickyControls" hidden>
+                    <span class="toolbar-label">Sticky</span>
+                    <div class="toolbar-group color-palette" id="stickyPalette" aria-label="Sticky note colour"></div>
+                </div>
+
+                <span class="toolbar-spacer"></span>
+
+                <div class="toolbar-group toolbar-actions">
+                    <button class="toolbar-button compact-button" id="undoButton" type="button" title="Undo (Ctrl+Z)">Undo</button>
+                    <button class="toolbar-button compact-button" id="zoomOutButton" type="button" aria-label="Zoom out">−</button>
+                    <output class="zoom-readout" id="zoomReadout">100%</output>
+                    <button class="toolbar-button compact-button" id="zoomInButton" type="button" aria-label="Zoom in">+</button>
+                    <button class="toolbar-button compact-button" id="resetViewButton" type="button" title="Reset view (Ctrl+0)">Reset</button>
+                </div>
+            </div>
+
+            <section class="board-viewport" id="boardViewport" aria-label="Infinite whiteboard canvas">
+                <canvas id="gridCanvas" aria-hidden="true"></canvas>
+                <div class="world-layer" id="worldLayer"></div>
+                <canvas id="boardCanvas" aria-hidden="true"></canvas>
+                <canvas id="interactionCanvas" aria-hidden="true"></canvas>
+
+                <button
+                    class="toolbar-button kanban-task-toggle"
+                    id="kanbanTaskToggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="kanbanTaskTray"
+                >
+                    Kanban tasks
+                    <span class="kanban-task-count" id="kanbanTaskCount">0</span>
+                </button>
+
+                <aside class="kanban-task-tray" id="kanbanTaskTray" aria-labelledby="kanbanTaskTrayTitle" hidden>
+                    <div class="kanban-task-tray-header">
+                        <div>
+                            <h2 id="kanbanTaskTrayTitle">Kanban tasks</h2>
+                            <p>Drag a task onto the whiteboard.</p>
+                        </div>
+                        <button class="kanban-task-tray-close" id="kanbanTaskTrayClose" type="button" aria-label="Close Kanban tasks">×</button>
+                    </div>
+                    <div class="kanban-task-list" id="kanbanTaskList"></div>
+                </aside>
+
+                <div class="kanban-task-drop-message" id="kanbanTaskDropMessage" aria-hidden="true">
+                    Drop to add task note
+                </div>
+
+                <div class="board-overlay" aria-live="polite">
+                    <span class="save-state" id="saveState">Loading…</span>
+                    <span class="overlay-status" id="statusMessage">Loading whiteboard…</span>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <dialog class="delete-board-dialog" aria-labelledby="delete-board-title">
+        <form class="delete-board-form">
+            <h2 id="delete-board-title">Delete project?</h2>
+            <p>
+                This permanently deletes <strong class="delete-board-name"></strong>,
+                including its kanban, Gantt data, and whiteboard.
+            </p>
+            <label for="delete-board-confirmation">
+                Type the project name to confirm
+            </label>
+            <input
+                id="delete-board-confirmation"
+                class="delete-board-confirmation"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <p class="delete-board-hint">The name must match exactly.</p>
+            <div class="delete-board-actions">
+                <button class="cancel-board-deletion" type="button">Cancel</button>
+                <button class="confirm-board-deletion" type="submit" disabled>
+                    Delete project
+                </button>
+            </div>
+        </form>
+    </dialog>
+
+    <script src="js/whiteboard.js"></script>
     <script src="js/view-switcher.js"></script>
 </body>
 </html>

@@ -35,6 +35,14 @@
         </div>
 
         <div class="kanban-settings-panel" id="kanban-settings-panel" hidden>
+            <div class="kanban-setting-section rename-project-setting">
+                <span class="kanban-setting-label">Project name</span>
+                <button class="rename-project-button" type="button">
+                    Rename project
+                </button>
+                <p>Edits the project title shown at the top.</p>
+            </div>
+
             <label class="kanban-setting-label" for="urgency-threshold">Urgency threshold</label>
             <div class="urgency-threshold-field">
                 <input
@@ -170,6 +178,7 @@
         </form>
     </dialog>
 
+    <script src="js/project-whiteboard-storage.js"></script>
     <script src="js/kanban.js"></script>
     <script src="js/view-switcher.js"></script>
 </body>
