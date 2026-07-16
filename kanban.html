@@ -34,7 +34,7 @@
         </div>
 
         <div class="kanban-settings-panel" id="kanban-settings-panel" hidden>
-            <label for="urgency-threshold">Urgency threshold</label>
+            <label class="kanban-setting-label" for="urgency-threshold">Urgency threshold</label>
             <div class="urgency-threshold-field">
                 <input
                     id="urgency-threshold"
@@ -47,6 +47,34 @@
                 <span>days</span>
             </div>
             <p>Tasks due within this many days are marked urgent.</p>
+
+            <div class="kanban-setting-section">
+                <span class="kanban-setting-label">Board background</span>
+                <div class="background-image-actions">
+                    <label class="background-image-upload" for="board-background-image">
+                        Upload image
+                    </label>
+                    <input
+                        id="board-background-image"
+                        class="background-image-input"
+                        type="file"
+                        accept="image/*"
+                    >
+                    <button class="remove-background-image" type="button" hidden>
+                        Remove
+                    </button>
+                </div>
+                <p class="background-image-status" aria-live="polite">
+                    This image is also used as the project cover.
+                </p>
+            </div>
+
+            <div class="kanban-setting-section kanban-danger-zone">
+                <span class="kanban-setting-label">Danger zone</span>
+                <button class="delete-board-button" type="button">
+                    Delete project
+                </button>
+            </div>
         </div>
 
         <div class="lists-row">
@@ -113,6 +141,33 @@
     </div>
 
     <div id="card-editor-backdrop" hidden></div>
+
+    <dialog class="delete-board-dialog" aria-labelledby="delete-board-title">
+        <form class="delete-board-form">
+            <h2 id="delete-board-title">Delete project?</h2>
+            <p>
+                This permanently deletes <strong class="delete-board-name"></strong>
+                and all of its tasks.
+            </p>
+            <label for="delete-board-confirmation">
+                Type the project name to confirm
+            </label>
+            <input
+                id="delete-board-confirmation"
+                class="delete-board-confirmation"
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+            >
+            <p class="delete-board-hint">The name must match exactly.</p>
+            <div class="delete-board-actions">
+                <button class="cancel-board-deletion" type="button">Cancel</button>
+                <button class="confirm-board-deletion" type="submit" disabled>
+                    Delete project
+                </button>
+            </div>
+        </form>
+    </dialog>
 
     <script src="js/kanban.js"></script>
 </body>

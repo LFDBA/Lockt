@@ -10,6 +10,15 @@
   position: relative;
 }
 
+.content.has-board-background {
+  background-image:
+    linear-gradient(rgba(243, 240, 234, 0.2), rgba(243, 240, 234, 0.2)),
+    var(--board-background-image);
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
+}
+
 .back,
 .settings {
   font-size: 48px;
@@ -38,7 +47,9 @@
   z-index: 1100;
   top: 112px;
   right: 48px;
-  width: 280px;
+  width: 310px;
+  max-height: calc(100vh - 132px);
+  overflow-y: auto;
   padding: 18px 20px;
   border: 2px solid rgba(59, 43, 35, 0.16);
   border-radius: 16px;
@@ -50,7 +61,7 @@
   display: none;
 }
 
-.kanban-settings-panel label {
+.kanban-setting-label {
   display: block;
   margin-bottom: 9px;
   font-size: 22px;
@@ -83,6 +94,183 @@
   color: #76665d;
   font-size: 15px;
   line-height: 1.25;
+}
+
+.kanban-setting-section {
+  margin-top: 17px;
+  padding-top: 15px;
+  border-top: 1px solid rgba(59, 43, 35, 0.15);
+}
+
+.background-image-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.background-image-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.background-image-upload,
+.remove-background-image,
+.delete-board-button {
+  min-height: 36px;
+  padding: 5px 13px 2px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+}
+
+.background-image-upload {
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+  background: #ded5ca;
+}
+
+.background-image-upload:hover,
+.background-image-upload:focus-within,
+.remove-background-image:hover,
+.remove-background-image:focus-visible {
+  background: #d3c7ba;
+}
+
+.remove-background-image {
+  background: #ebe4db;
+  color: #665149;
+}
+
+.background-image-input:focus-visible + .remove-background-image,
+.background-image-upload:has(+ .background-image-input:focus-visible) {
+  outline: 2px solid rgba(59, 43, 35, 0.48);
+  outline-offset: 2px;
+}
+
+.kanban-settings-panel .background-image-status {
+  margin-top: 8px;
+}
+
+.kanban-danger-zone {
+  border-top-color: rgba(154, 56, 47, 0.24);
+}
+
+.delete-board-button {
+  width: 100%;
+  background: #edd9d4;
+  color: #963c34;
+  text-align: center;
+}
+
+.delete-board-button:hover,
+.delete-board-button:focus-visible {
+  outline: 0;
+  background: #e5c8c2;
+}
+
+.delete-board-dialog {
+  width: min(430px, calc(100vw - 36px));
+  padding: 0;
+  border: 0;
+  border-radius: 18px;
+  background: #f8f5ef;
+  color: #3b2b23;
+  box-shadow: 0 18px 55px rgba(43, 31, 25, 0.32);
+}
+
+.delete-board-dialog::backdrop {
+  background: rgba(43, 35, 30, 0.38);
+  backdrop-filter: blur(2px);
+}
+
+.delete-board-form {
+  padding: 25px 27px 23px;
+}
+
+.delete-board-form h2 {
+  margin: 0 0 9px;
+  font-size: 29px;
+  font-weight: 400;
+  line-height: 1.1;
+}
+
+.delete-board-form p {
+  margin: 0 0 18px;
+  font-size: 17px;
+  line-height: 1.3;
+}
+
+.delete-board-form label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 17px;
+}
+
+.delete-board-confirmation {
+  width: 100%;
+  height: 40px;
+  padding: 5px 11px 2px;
+  border: 2px solid rgba(59, 43, 35, 0.28);
+  border-radius: 9px;
+  outline: 0;
+  background: #fffdf9;
+  color: inherit;
+  font: inherit;
+  font-size: 18px;
+}
+
+.delete-board-confirmation:focus {
+  border-color: rgba(59, 43, 35, 0.68);
+}
+
+.delete-board-form .delete-board-hint {
+  margin: 5px 0 19px;
+  color: #76665d;
+  font-size: 14px;
+}
+
+.delete-board-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.delete-board-actions button {
+  min-height: 38px;
+  padding: 5px 15px 2px;
+  border: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+}
+
+.cancel-board-deletion {
+  background: #e4ddd4;
+  color: #3b2b23;
+}
+
+.confirm-board-deletion {
+  background: #a8463d;
+  color: #fffaf4;
+}
+
+.confirm-board-deletion:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.delete-board-actions button:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.55);
+  outline-offset: 2px;
 }
 
 

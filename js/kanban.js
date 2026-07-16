@@ -8,6 +8,25 @@ const projectTitleInput = document.querySelector(".project-title");
 const settingsButton = document.querySelector(".kanban-settings-button");
 const settingsPanel = document.querySelector(".kanban-settings-panel");
 const urgencyThresholdInput = document.querySelector("#urgency-threshold");
+const boardContent = document.querySelector(".content");
+const backgroundImageInput = document.querySelector("#board-background-image");
+const removeBackgroundImageButton = document.querySelector(
+    ".remove-background-image"
+);
+const backgroundImageStatus = document.querySelector(
+    ".background-image-status"
+);
+const deleteBoardButton = document.querySelector(".delete-board-button");
+const deleteBoardDialog = document.querySelector(".delete-board-dialog");
+const deleteBoardForm = document.querySelector(".delete-board-form");
+const deleteBoardName = document.querySelector(".delete-board-name");
+const deleteBoardConfirmation = document.querySelector(
+    ".delete-board-confirmation"
+);
+const cancelBoardDeletion = document.querySelector(".cancel-board-deletion");
+const confirmBoardDeletion = document.querySelector(
+    ".confirm-board-deletion"
+);
 
 let draggedCard = null;
 let draggedFromList = null;
@@ -32,7 +51,10 @@ const PROJECTS_STORAGE_KEY = "lockt:kanban-projects";
 const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
 const PROJECT_SETTINGS_STORAGE_KEY = "lockt:kanban-project-settings";
 const NEW_PROJECT_FOCUS_STORAGE_KEY = "lockt:new-kanban-project";
+const HOME_INITIALIZED_STORAGE_KEY = "lockt:home-initialized";
 const DEFAULT_URGENCY_THRESHOLD_DAYS = 7;
+const MAX_BACKGROUND_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_BACKGROUND_IMAGE_DIMENSION = 1600;
 let BOARD_STORAGE_KEY = getSelectedBoardStorageKey();
 let urgencyThresholdDays = getProjectUrgencyThreshold(BOARD_STORAGE_KEY);
 const cardDateFormatter = new Intl.DateTimeFormat("en-US", {
@@ -185,6 +207,154 @@ function saveProjectUrgencyThreshold(projectName, thresholdDays) {
     } catch (error) {
         console.warn("Unable to save the urgency threshold", error);
     }
+}
+
+function getProjectBackgroundImage(projectName) {
+    const backgroundImage = readProjectSettings()[projectName]?.backgroundImage;
+
+    return typeof backgroundImage === "string" &&
+        backgroundImage.startsWith("data:image/")
+        ? backgroundImage
+        : "";
+}
+
+function saveProjectBackgroundImage(projectName, backgroundImage, fileName) {
+    try {
+        const settings = readProjectSettings();
+
+        window.localStorage.setItem(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            JSON.stringify({
+                ...settings,
+                [projectName]: {
+                    ...(settings[projectName] || {}),
+                    backgroundImage,
+                    backgroundImageName: fileName
+                }
+            })
+        );
+        return true;
+    } catch (error) {
+        console.warn("Unable to save the board background", error);
+        return false;
+    }
+}
+
+function removeProjectBackgroundImage(projectName) {
+    try {
+        const settings = readProjectSettings();
+        const projectSettings = { ...(settings[projectName] || {}) };
+
+        delete projectSettings.backgroundImage;
+        delete projectSettings.backgroundImageName;
+
+        window.localStorage.setItem(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            JSON.stringify({
+                ...settings,
+                [projectName]: projectSettings
+            })
+        );
+        return true;
+    } catch (error) {
+        console.warn("Unable to remove the board background", error);
+        return false;
+    }
+}
+
+function applyProjectBackgroundImage() {
+    if (!boardContent) return;
+
+    const backgroundImage = getProjectBackgroundImage(BOARD_STORAGE_KEY);
+
+    boardContent.classList.toggle("has-board-background", Boolean(backgroundImage));
+
+    if (backgroundImage) {
+        boardContent.style.setProperty(
+            "--board-background-image",
+            `url("${backgroundImage}")`
+        );
+    } else {
+        boardContent.style.removeProperty("--board-background-image");
+    }
+}
+
+function syncBackgroundImageControls(message = "") {
+    const projectSettings = readProjectSettings()[BOARD_STORAGE_KEY] || {};
+    const hasBackgroundImage = Boolean(getProjectBackgroundImage(BOARD_STORAGE_KEY));
+
+    if (removeBackgroundImageButton) {
+        removeBackgroundImageButton.hidden = !hasBackgroundImage;
+    }
+
+    if (!backgroundImageStatus) return;
+
+    if (message) {
+        backgroundImageStatus.textContent = message;
+        return;
+    }
+
+    backgroundImageStatus.textContent = hasBackgroundImage
+        ? `Using ${projectSettings.backgroundImageName || "uploaded image"} as the board background and cover.`
+        : "This image is also used as the project cover.";
+}
+
+function loadBackgroundImage(file) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        image.addEventListener("load", () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+        });
+        image.addEventListener("error", () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("That image could not be read."));
+        });
+        image.src = objectUrl;
+    });
+}
+
+async function optimizeBackgroundImage(file) {
+    if (!file.type.startsWith("image/")) {
+        throw new Error("Please choose an image file.");
+    }
+
+    if (file.size > MAX_BACKGROUND_IMAGE_BYTES) {
+        throw new Error("Please choose an image smaller than 15 MB.");
+    }
+
+    const image = await loadBackgroundImage(file);
+    const scale = Math.min(
+        1,
+        MAX_BACKGROUND_IMAGE_DIMENSION / Math.max(image.width, image.height)
+    );
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+
+    if (!context) {
+        throw new Error("This browser cannot prepare that image.");
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let quality = 0.82;
+    let optimizedImage = canvas.toDataURL("image/webp", quality);
+
+    while (optimizedImage.length > 1_250_000 && quality > 0.52) {
+        quality -= 0.08;
+        optimizedImage = canvas.toDataURL("image/webp", quality);
+    }
+
+    if (!optimizedImage.startsWith("data:image/")) {
+        throw new Error("That image could not be prepared.");
+    }
+
+    return optimizedImage;
 }
 
 function moveProjectSettings(previousName, nextName) {
