@@ -38,12 +38,16 @@ let pendingListDrag = null;
 let activeCardNewListGhost = null;
 let activeCardEditor = null;
 let allowBoardNavigation = false;
+let dragAutoScrollFrame = 0;
+let dragAutoScrollVelocity = 0;
 
 const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
 let lastListColour = null;
 const DROP_ANIMATION_MS = 180;
 const CARD_EDITOR_TRANSITION_MS = 240;
 const LIST_DRAG_THRESHOLD = 6;
+const DRAG_AUTO_SCROLL_EDGE = 76;
+const DRAG_AUTO_SCROLL_MAX_SPEED = 18;
 const EMPTY_CARD_DATE_LABEL = "No due date";
 const DEFAULT_BOARD_STORAGE_KEY = "My Project";
 const LEGACY_BOARD_STORAGE_KEY = "lockt.board.v1";
@@ -857,17 +861,22 @@ function getRandomListColour() {
     return randomColour;
 }
 
-function getListAfterPointer(pointerX) {
+function getListAfterPointer(pointerX, pointerY) {
     const otherLists = [
         ...listsRow.querySelectorAll(
             '.list:not(.list-placeholder):not([data-ghost-list="true"])'
         )
     ];
+    const isVerticalLayout =
+        window.getComputedStyle(listsRow).display === "grid";
 
     return otherLists.reduce(
         (closest, list) => {
             const bounds = list.getBoundingClientRect();
-            const offset = pointerX - bounds.left - bounds.width / 2;
+            const pointerPosition = isVerticalLayout ? pointerY : pointerX;
+            const listStart = isVerticalLayout ? bounds.top : bounds.left;
+            const listSize = isVerticalLayout ? bounds.height : bounds.width;
+            const offset = pointerPosition - listStart - listSize / 2;
 
             if (offset < 0 && offset > closest.offset) {
                 return { offset, element: list };
@@ -1006,11 +1015,88 @@ function clearDragHighlights() {
     trash.classList.remove("drag-over");
 }
 
+function captureDragPointer(pointerId) {
+    if (!Number.isInteger(pointerId)) return null;
+
+    try {
+        listsRow.setPointerCapture(pointerId);
+        return listsRow;
+    } catch (error) {
+        return null;
+    }
+}
+
+function releaseDragPointerCapture(dragState) {
+    const captureElement = dragState?.captureElement;
+    const pointerId = dragState?.pointerId;
+
+    if (!captureElement || !Number.isInteger(pointerId)) return;
+
+    try {
+        if (captureElement.hasPointerCapture(pointerId)) {
+            captureElement.releasePointerCapture(pointerId);
+        }
+    } catch (error) {
+        // The browser may already have released capture after pointerup.
+    }
+}
+
+function stopDragAutoScroll() {
+    dragAutoScrollVelocity = 0;
+
+    if (dragAutoScrollFrame) {
+        window.cancelAnimationFrame(dragAutoScrollFrame);
+        dragAutoScrollFrame = 0;
+    }
+}
+
+function runDragAutoScroll() {
+    if (!activeCardDrag && !activeListDrag) {
+        stopDragAutoScroll();
+        return;
+    }
+
+    if (dragAutoScrollVelocity) {
+        window.scrollBy(0, dragAutoScrollVelocity);
+    }
+
+    dragAutoScrollFrame = window.requestAnimationFrame(runDragAutoScroll);
+}
+
+function updateDragAutoScroll(pointerY) {
+    const viewportHeight = window.innerHeight;
+    let nextVelocity = 0;
+
+    if (pointerY < DRAG_AUTO_SCROLL_EDGE) {
+        const strength = 1 - pointerY / DRAG_AUTO_SCROLL_EDGE;
+        nextVelocity = -Math.max(
+            2,
+            Math.round(DRAG_AUTO_SCROLL_MAX_SPEED * strength)
+        );
+    } else if (pointerY > viewportHeight - DRAG_AUTO_SCROLL_EDGE) {
+        const strength =
+            (pointerY - (viewportHeight - DRAG_AUTO_SCROLL_EDGE)) /
+            DRAG_AUTO_SCROLL_EDGE;
+        nextVelocity = Math.max(
+            2,
+            Math.round(DRAG_AUTO_SCROLL_MAX_SPEED * strength)
+        );
+    }
+
+    dragAutoScrollVelocity = nextVelocity;
+
+    if (!dragAutoScrollFrame) {
+        dragAutoScrollFrame = window.requestAnimationFrame(runDragAutoScroll);
+    }
+}
+
 function stopListPointerTracking() {
     window.removeEventListener("pointermove", handleListPointerMove);
     window.removeEventListener("pointerup", handleListPointerUp);
     window.removeEventListener("pointercancel", handleListPointerCancel);
 
+    releaseDragPointerCapture(activeListDrag);
+    stopDragAutoScroll();
     document.body.classList.remove("list-drag-active");
     clearDragHighlights();
 }
@@ -1142,6 +1228,7 @@ function renderCardDisplayContent(card, cardData = {}) {
             : card.dataset.startDateValue || ""
     );
     const options = document.createElement("div");
+    const dragHandle = document.createElement("button");
     const description = document.createElement("p");
     const date = document.createElement("div");
 
@@ -1161,6 +1248,14 @@ function renderCardDisplayContent(card, cardData = {}) {
     options.setAttribute("aria-label", "Edit card");
     options.tabIndex = 0;
 
+    dragHandle.className = "card-drag-handle";
+    dragHandle.type = "button";
+    dragHandle.textContent = "⠿";
+    dragHandle.setAttribute(
+        "aria-label",
+        "Drag " + (title || "task")
+    );
+
     description.textContent = title;
     date.className = "date";
     date.textContent = dateValue ? formatCardDate(dateValue) : fallbackDateLabel;
@@ -1171,7 +1266,7 @@ function renderCardDisplayContent(card, cardData = {}) {
         date.classList.add("is-empty");
     }
 
-    card.replaceChildren(options, description, date);
+    card.replaceChildren(options, dragHandle, description, date);
     setupCardOptions(options);
 }
 
@@ -1391,6 +1486,8 @@ function stopCardPointerTracking() {
     window.removeEventListener("pointerup", handleCardPointerUp);
     window.removeEventListener("pointercancel", handleCardPointerCancel);
 
+    releaseDragPointerCapture(activeCardDrag);
+    stopDragAutoScroll();
     document.body.classList.remove("card-drag-active");
     clearDragHighlights();
 }
@@ -1450,8 +1547,13 @@ function getPointerDropTarget(clientX, clientY) {
     };
 }
 
-function movePlaceholderToPointer(container, placeholder, pointerY) {
-    const nextCard = getCardAfterPointer(container, pointerY);
+function movePlaceholderToPointer(
+    container,
+    placeholder,
+    pointerX,
+    pointerY
+) {
+    const nextCard = getCardAfterPointer(container, pointerX, pointerY);
 
     if (nextCard) {
         container.insertBefore(placeholder, nextCard);
@@ -1472,9 +1574,16 @@ function updateCardPreviewPosition(clientX, clientY) {
 }
 
 function handleCardPointerMove(event) {
-    if (!activeCardDrag) return;
+    if (
+        !activeCardDrag ||
+        event.pointerId !== activeCardDrag.pointerId
+    ) {
+        return;
+    }
 
+    event.preventDefault();
     updateCardPreviewPosition(event.clientX, event.clientY);
+    updateDragAutoScroll(event.clientY);
     clearDragHighlights();
 
     const { container, overTrash } = getPointerDropTarget(
@@ -1493,6 +1602,7 @@ function handleCardPointerMove(event) {
     movePlaceholderToPointer(
         container,
         activeCardDrag.placeholder,
+        event.clientX,
         event.clientY
     );
 
@@ -1515,10 +1625,10 @@ function updateListPreviewPosition(clientX, clientY) {
     }px`;
 }
 
-function moveListPlaceholderToPointer(pointerX) {
+function moveListPlaceholderToPointer(pointerX, pointerY) {
     if (!activeListDrag) return;
 
-    const nextList = getListAfterPointer(pointerX);
+    const nextList = getListAfterPointer(pointerX, pointerY);
 
     if (nextList) {
         listsRow.insertBefore(activeListDrag.placeholder, nextList);
@@ -1529,9 +1639,16 @@ function moveListPlaceholderToPointer(pointerX) {
 }
 
 function handleListPointerMove(event) {
-    if (!activeListDrag) return;
+    if (
+        !activeListDrag ||
+        event.pointerId !== activeListDrag.pointerId
+    ) {
+        return;
+    }
 
+    event.preventDefault();
     updateListPreviewPosition(event.clientX, event.clientY);
+    updateDragAutoScroll(event.clientY);
     clearDragHighlights();
 
     const { overTrash } = getPointerDropTarget(event.clientX, event.clientY);
@@ -1541,11 +1658,11 @@ function handleListPointerMove(event) {
         return;
     }
 
-    moveListPlaceholderToPointer(event.clientX);
+    moveListPlaceholderToPointer(event.clientX, event.clientY);
 }
 
 function beginListDrag(listDrag, clientX, clientY) {
-    const { list, pointerOffsetX, pointerOffsetY } = listDrag;
+    const { list, pointerId, pointerOffsetX, pointerOffsetY } = listDrag;
     const bounds = list.getBoundingClientRect();
     const preview = list.cloneNode(true);
     const placeholder = list.cloneNode(true);
@@ -1571,8 +1688,10 @@ function beginListDrag(listDrag, clientX, clientY) {
         list,
         placeholder,
         preview,
+        pointerId,
         pointerOffsetX,
-        pointerOffsetY
+        pointerOffsetY,
+        captureElement: captureDragPointer(pointerId)
     };
 
     updateListPreviewPosition(clientX, clientY);
@@ -1768,28 +1887,48 @@ function finishListDrop({ deleteList = false } = {}) {
 }
 
 function handleCardPointerUp(event) {
-    if (!activeCardDrag) return;
+    if (
+        !activeCardDrag ||
+        event.pointerId !== activeCardDrag.pointerId
+    ) {
+        return;
+    }
 
     const { overTrash } = getPointerDropTarget(event.clientX, event.clientY);
     finishCardDrop({ deleteCard: overTrash });
 }
 
 function handleListPointerUp(event) {
-    if (!activeListDrag) return;
+    if (
+        !activeListDrag ||
+        event.pointerId !== activeListDrag.pointerId
+    ) {
+        return;
+    }
 
     const { overTrash } = getPointerDropTarget(event.clientX, event.clientY);
 
     finishListDrop({ deleteList: overTrash });
 }
 
-function handleCardPointerCancel() {
-    if (!activeCardDrag) return;
+function handleCardPointerCancel(event) {
+    if (
+        !activeCardDrag ||
+        event.pointerId !== activeCardDrag.pointerId
+    ) {
+        return;
+    }
 
     finishCardDrop();
 }
 
-function handleListPointerCancel() {
-    if (!activeListDrag) return;
+function handleListPointerCancel(event) {
+    if (
+        !activeListDrag ||
+        event.pointerId !== activeListDrag.pointerId
+    ) {
+        return;
+    }
 
     clearListDrag();
 }
@@ -2027,6 +2166,7 @@ function setupList(list) {
     const container = list.querySelector(".list-cards");
     const addCardButton = list.querySelector(".add-card");
     const titleInput = list.querySelector(".list-title");
+    const dragHandle = list.querySelector(".list-header span");
 
     if (container) {
         setupContainer(container);
@@ -2039,6 +2179,12 @@ function setupList(list) {
     if (titleInput) {
         titleInput.addEventListener("input", saveBoardState);
         titleInput.addEventListener("change", saveBoardState);
+    }
+
+    if (dragHandle) {
+        dragHandle.classList.add("list-drag-handle");
+        dragHandle.setAttribute("role", "button");
+        dragHandle.setAttribute("aria-label", "Drag list");
     }
 
     setupListDrag(list);
@@ -2095,12 +2241,32 @@ function setupCard(card) {
         event.preventDefault();
     });
 
+    card.addEventListener("click", (event) => {
+        if (
+            !window.matchMedia("(max-width: 760px)").matches ||
+            event.target.closest(".card-drag-handle, .card-options") ||
+            activeCardDrag ||
+            activeCardEditor
+        ) {
+            return;
+        }
+
+        openCardEditor(card);
+    });
+
     card.addEventListener("pointerdown", (event) => {
         if (card === activeCardEditor?.card) {
             return;
         }
 
-        if (event.button !== 0 || event.target.closest(".card-options")) {
+        const isTouchPointer = event.pointerType === "touch";
+        const usedTouchHandle = event.target.closest(".card-drag-handle");
+
+        if (
+            event.button !== 0 ||
+            event.target.closest(".card-options") ||
+            (isTouchPointer && !usedTouchHandle)
+        ) {
             return;
         }
 
@@ -2138,8 +2304,10 @@ function setupCard(card) {
             placeholder,
             preview,
             sourceList: draggedFromList,
+            pointerId: event.pointerId,
             pointerOffsetX,
-            pointerOffsetY
+            pointerOffsetY,
+            captureElement: captureDragPointer(event.pointerId)
         };
 
         updateCardPreviewPosition(event.clientX, event.clientY);
@@ -2165,10 +2333,14 @@ function setupListDrag(list) {
     });
 
     list.addEventListener("pointerdown", (event) => {
+        const isTouchPointer = event.pointerType === "touch";
+        const usedTouchHandle = event.target.closest(".list-drag-handle");
+
         if (
             event.button !== 0 ||
             event.target.closest(".card, .card-composer, button, textarea") ||
-            event.target.closest("input:not(.list-title)")
+            event.target.closest("input:not(.list-title)") ||
+            (isTouchPointer && !usedTouchHandle)
         ) {
             return;
         }
@@ -2201,6 +2373,10 @@ function setupListDrag(list) {
         window.addEventListener("pointermove", handlePendingListPointerMove);
         window.addEventListener("pointerup", handlePendingListPointerUp);
         window.addEventListener("pointercancel", handlePendingListPointerCancel);
+
+        if (isTouchPointer) {
+            event.preventDefault();
+        }
     });
 }
 
@@ -2232,7 +2408,11 @@ function setupContainer(container) {
 
         container.classList.add("drag-over");
 
-        const nextCard = getCardAfterPointer(container, event.clientY);
+        const nextCard = getCardAfterPointer(
+            container,
+            event.clientX,
+            event.clientY
+        );
 
         if (nextCard) {
             container.insertBefore(draggedCard, nextCard);
@@ -2287,10 +2467,59 @@ function setupTrash(container) {
     });
 }
 
-function getCardAfterPointer(container, pointerY) {
+function getCardAfterPointer(container, pointerX, pointerY) {
     const otherCards = [
         ...container.querySelectorAll(".card:not(.card-placeholder)")
     ];
+    const containerStyle = window.getComputedStyle(container);
+    const isGridLayout = containerStyle.display === "grid";
+
+    if (isGridLayout && otherCards.length) {
+        const sortedCards = [...otherCards].sort((firstCard, secondCard) => {
+            const firstBounds = firstCard.getBoundingClientRect();
+            const secondBounds = secondCard.getBoundingClientRect();
+            const rowDifference = firstBounds.top - secondBounds.top;
+
+            return Math.abs(rowDifference) > 4
+                ? rowDifference
+                : firstBounds.left - secondBounds.left;
+        });
+        const rows = [];
+
+        sortedCards.forEach((card) => {
+            const bounds = card.getBoundingClientRect();
+            const currentRow = rows.at(-1);
+
+            if (!currentRow || Math.abs(currentRow.top - bounds.top) > 4) {
+                rows.push({
+                    top: bounds.top,
+                    centreY: bounds.top + bounds.height / 2,
+                    cards: [{ card, bounds }]
+                });
+                return;
+            }
+
+            currentRow.cards.push({ card, bounds });
+        });
+
+        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+            const row = rows[rowIndex];
+            const nextRow = rows[rowIndex + 1];
+            const rowBoundary = nextRow
+                ? (row.centreY + nextRow.centreY) / 2
+                : Number.POSITIVE_INFINITY;
+
+            if (pointerY >= rowBoundary) continue;
+
+            const nextCardInRow = row.cards.find(({ bounds }) => {
+                return pointerX < bounds.left + bounds.width / 2;
+            });
+
+            return nextCardInRow?.card || nextRow?.cards[0]?.card || null;
+        }
+
+        return null;
+    }
 
     return otherCards.reduce(
         (closest, card) => {

@@ -54,6 +54,10 @@
   line-height: 1;
 }
 
+.card-drag-handle {
+  display: none;
+}
+
 .home-theme-toggle {
   position: absolute;
   top: 0;
@@ -678,7 +682,24 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
   }
 
   .kanban-body .list-header span {
-    display: none;
+    display: grid;
+    width: 29px;
+    height: 29px;
+    flex: 0 0 29px;
+    place-items: center;
+    overflow: hidden;
+    color: #3b2b23;
+    cursor: grab;
+    font-family: system-ui, sans-serif;
+    font-size: 0;
+    line-height: 1;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .kanban-body .list-header span::before {
+    font-size: 17px;
+    content: "⠿";
   }
 
   .kanban-body .list-title {
@@ -713,10 +734,12 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
     padding: 12px 13px;
     border-width: 2px;
     border-radius: 15px;
+    touch-action: pan-y;
   }
 
   .kanban-body .card p {
     margin-bottom: 8px;
+    padding-right: 15px;
     font-size: 15px;
   }
 
@@ -733,7 +756,7 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
   .kanban-body .add-card {
     position: absolute;
     top: -1px;
-    right: 0;
+    right: 34px;
     width: 31px;
     min-height: 31px;
     padding: 0;
@@ -755,6 +778,51 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
     color: var(--lockt-dark-text);
   }
 
+  html[data-theme="dark"] .kanban-body .list-header span {
+    color: var(--lockt-dark-text);
+  }
+
+  .kanban-body .card-drag-handle {
+    position: absolute;
+    z-index: 3;
+    top: 6px;
+    right: 7px;
+    display: grid;
+    width: 25px;
+    height: 25px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: rgba(59, 43, 35, 0.08);
+    color: #65584f;
+    cursor: grab;
+    font: 17px/1 system-ui, sans-serif;
+    touch-action: none;
+    user-select: none;
+  }
+
+  .kanban-body .card-drag-handle:active,
+  .kanban-body .list-drag-handle:active {
+    cursor: grabbing;
+  }
+
+  .kanban-body .card-options {
+    display: none;
+  }
+
+  html[data-theme="dark"] .kanban-body .card-drag-handle {
+    background: rgba(255, 255, 255, 0.09);
+    color: var(--lockt-dark-text);
+  }
+
+  .kanban-body .card-preview .card-drag-handle,
+  .kanban-body .card-placeholder .card-drag-handle,
+  .kanban-body .list-preview .list-drag-handle,
+  .kanban-body .list-placeholder .list-drag-handle {
+    visibility: hidden;
+  }
+
   .kanban-body .add-list {
     height: 55px;
     font-size: 24px;
@@ -767,10 +835,24 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
   }
 
   #trash {
-    right: 16px;
+    right: auto;
     bottom: 16px;
+    left: 50%;
     width: 52px;
     height: 52px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%);
+  }
+
+  body.card-drag-active #trash,
+  body.list-drag-active #trash {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  #trash.drag-over {
+    transform: translateX(-50%) scale(1.1);
   }
 
   .focus-mode-exit {
