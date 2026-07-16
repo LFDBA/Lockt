@@ -63,10 +63,76 @@
     </div>
 
     <div class="project-context-menu" role="menu" aria-label="Project actions" hidden>
+        <button class="change-project-cover-menu-item" type="button" role="menuitem">
+            Change cover
+        </button>
         <button class="delete-project-menu-item" type="button" role="menuitem">
             Delete project
         </button>
     </div>
+
+    <dialog class="project-view-dialog" aria-labelledby="project-view-title">
+        <div class="project-view-panel">
+            <h2 id="project-view-title">Open project</h2>
+            <p>
+                Choose a view for <strong class="project-view-name"></strong>.
+            </p>
+            <div class="project-view-options">
+                <button type="button" data-project-view="kanban">
+                    <strong>Kanban</strong>
+                    <span>Cards and lists</span>
+                </button>
+                <button type="button" data-project-view="gantt">
+                    <strong>Gantt</strong>
+                    <span>Tasks over time</span>
+                </button>
+                <button type="button" data-project-view="whiteboard">
+                    <strong>Whiteboard</strong>
+                    <span>Open canvas</span>
+                </button>
+            </div>
+            <button class="close-project-view" type="button">Cancel</button>
+        </div>
+    </dialog>
+
+    <dialog class="project-cover-dialog" aria-labelledby="project-cover-title">
+        <div class="project-cover-panel">
+            <h2 id="project-cover-title">Change cover</h2>
+            <p>
+                Choose a separate home-page cover for
+                <strong class="project-cover-name"></strong>.
+            </p>
+
+            <span class="project-cover-label">Upload an image</span>
+            <label class="project-cover-upload" for="project-cover-image">
+                Choose image
+            </label>
+            <input
+                id="project-cover-image"
+                class="project-cover-image-input"
+                type="file"
+                accept="image/*"
+            >
+
+            <span class="project-cover-label colour-label">Or choose a colour</span>
+            <div class="project-cover-colours" aria-label="Preset cover colours">
+                <button type="button" data-cover-colour="#c88f6b" style="--cover-swatch: #c88f6b" aria-label="Terracotta"></button>
+                <button type="button" data-cover-colour="#9eae94" style="--cover-swatch: #9eae94" aria-label="Sage"></button>
+                <button type="button" data-cover-colour="#b9a078" style="--cover-swatch: #b9a078" aria-label="Sand"></button>
+                <button type="button" data-cover-colour="#8fa9a3" style="--cover-swatch: #8fa9a3" aria-label="Teal"></button>
+                <button type="button" data-cover-colour="#b8a4cc" style="--cover-swatch: #b8a4cc" aria-label="Lavender"></button>
+                <button type="button" data-cover-colour="#c9a3a3" style="--cover-swatch: #c9a3a3" aria-label="Rose"></button>
+                <button type="button" data-cover-colour="#d3b99f" style="--cover-swatch: #d3b99f" aria-label="Clay"></button>
+                <button type="button" data-cover-colour="#7f9bb3" style="--cover-swatch: #7f9bb3" aria-label="Blue"></button>
+            </div>
+
+            <p class="project-cover-status" aria-live="polite"></p>
+            <div class="project-cover-actions">
+                <button class="reset-project-cover" type="button">Use default cover</button>
+                <button class="close-project-cover" type="button">Cancel</button>
+            </div>
+        </div>
+    </dialog>
 
     <dialog class="delete-project-dialog" aria-labelledby="delete-project-title">
         <form class="delete-project-form">

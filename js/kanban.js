@@ -295,8 +295,8 @@ function syncBackgroundImageControls(message = "") {
     }
 
     backgroundImageStatus.textContent = hasBackgroundImage
-        ? `Using ${projectSettings.backgroundImageName || "uploaded image"} as the board background and cover.`
-        : "This image is also used as the project cover.";
+        ? `Using ${projectSettings.backgroundImageName || "uploaded image"} as the background and fallback cover.`
+        : "Also used as the cover unless a separate cover is chosen.";
 }
 
 function loadBackgroundImage(file) {
@@ -638,6 +638,177 @@ function setupKanbanSettings() {
 
         refreshCardUrgency();
         saveBoardState();
+    });
+}
+
+function setupBackgroundImageSettings() {
+    applyProjectBackgroundImage();
+    syncBackgroundImageControls();
+
+    backgroundImageInput?.addEventListener("change", async () => {
+        const selectedFile = backgroundImageInput.files?.[0];
+
+        if (!selectedFile) return;
+
+        backgroundImageInput.disabled = true;
+        syncBackgroundImageControls("Preparing image…");
+
+        try {
+            const optimizedImage = await optimizeBackgroundImage(selectedFile);
+            const wasSaved = saveProjectBackgroundImage(
+                BOARD_STORAGE_KEY,
+                optimizedImage,
+                selectedFile.name
+            );
+
+            if (!wasSaved) {
+                throw new Error(
+                    "There is not enough browser storage for that image."
+                );
+            }
+
+            applyProjectBackgroundImage();
+            syncBackgroundImageControls();
+        } catch (error) {
+            syncBackgroundImageControls(
+                error instanceof Error
+                    ? error.message
+                    : "Unable to use that image."
+            );
+        } finally {
+            backgroundImageInput.disabled = false;
+            backgroundImageInput.value = "";
+        }
+    });
+
+    removeBackgroundImageButton?.addEventListener("click", () => {
+        if (!removeProjectBackgroundImage(BOARD_STORAGE_KEY)) {
+            syncBackgroundImageControls("Unable to remove the background image.");
+            return;
+        }
+
+        applyProjectBackgroundImage();
+        syncBackgroundImageControls();
+    });
+}
+
+function removeProjectFromObjectStorage(storageKey, projectName) {
+    try {
+        const savedRecords = JSON.parse(
+            window.localStorage.getItem(storageKey) || "{}"
+        );
+        const records =
+            savedRecords &&
+            typeof savedRecords === "object" &&
+            !Array.isArray(savedRecords)
+                ? savedRecords
+                : {};
+        const nextRecords = { ...records };
+
+        delete nextRecords[projectName];
+        window.localStorage.setItem(storageKey, JSON.stringify(nextRecords));
+    } catch (error) {
+        console.warn(`Unable to remove ${projectName} from ${storageKey}`, error);
+    }
+}
+
+function deleteCurrentBoard() {
+    const projectName = BOARD_STORAGE_KEY;
+
+    try {
+        window.localStorage.setItem(HOME_INITIALIZED_STORAGE_KEY, "true");
+        window.localStorage.removeItem(projectName);
+
+        if (projectName === DEFAULT_BOARD_STORAGE_KEY) {
+            window.localStorage.removeItem(LEGACY_BOARD_STORAGE_KEY);
+        }
+
+        saveProjectNames(
+            readProjectNames().filter((savedProjectName) => {
+                return savedProjectName !== projectName;
+            })
+        );
+        removeProjectFromObjectStorage(
+            PROJECT_METADATA_STORAGE_KEY,
+            projectName
+        );
+        removeProjectFromObjectStorage(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            projectName
+        );
+
+        if (
+            window.localStorage.getItem(ACTIVE_BOARD_STORAGE_KEY) === projectName
+        ) {
+            window.localStorage.removeItem(ACTIVE_BOARD_STORAGE_KEY);
+        }
+
+        if (
+            window.sessionStorage.getItem(NEW_PROJECT_FOCUS_STORAGE_KEY) ===
+            projectName
+        ) {
+            window.sessionStorage.removeItem(NEW_PROJECT_FOCUS_STORAGE_KEY);
+        }
+    } catch (error) {
+        console.warn("Unable to delete project", error);
+        return;
+    }
+
+    allowBoardNavigation = true;
+    window.location.href = "index.html";
+}
+
+function setupBoardDeletion() {
+    if (
+        !deleteBoardButton ||
+        !deleteBoardDialog ||
+        !deleteBoardForm ||
+        !deleteBoardName ||
+        !deleteBoardConfirmation ||
+        !confirmBoardDeletion
+    ) {
+        return;
+    }
+
+    deleteBoardButton.addEventListener("click", () => {
+        closeKanbanSettings();
+        deleteBoardName.textContent = BOARD_STORAGE_KEY;
+        deleteBoardConfirmation.value = "";
+        confirmBoardDeletion.disabled = true;
+        deleteBoardDialog.showModal();
+
+        requestAnimationFrame(() => {
+            deleteBoardConfirmation.focus();
+        });
+    });
+
+    deleteBoardConfirmation.addEventListener("input", () => {
+        confirmBoardDeletion.disabled =
+            deleteBoardConfirmation.value !== BOARD_STORAGE_KEY;
+    });
+
+    cancelBoardDeletion?.addEventListener("click", () => {
+        deleteBoardDialog.close();
+    });
+
+    deleteBoardForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        if (deleteBoardConfirmation.value !== BOARD_STORAGE_KEY) return;
+
+        deleteBoardDialog.close();
+        deleteCurrentBoard();
+    });
+
+    deleteBoardDialog.addEventListener("click", (event) => {
+        if (event.target === deleteBoardDialog) {
+            deleteBoardDialog.close();
+        }
+    });
+
+    deleteBoardDialog.addEventListener("close", () => {
+        deleteBoardConfirmation.value = "";
+        confirmBoardDeletion.disabled = true;
     });
 }
 
@@ -1691,6 +1862,8 @@ function initializeBoard() {
     syncBoardTitle();
     setupProjectTitleEditor();
     setupKanbanSettings();
+    setupBackgroundImageSettings();
+    setupBoardDeletion();
     focusNewProjectTitle();
 
     const savedBoardState = readBoardState();

@@ -7,6 +7,7 @@
     <title>My Project Board</title>
     <link rel="stylesheet" href="css/kanban.css"/>
     <link rel="stylesheet" href="css/base.css"/>
+    <link rel="stylesheet" href="css/view-switcher.css"/>
 </head>
 
 <body>
@@ -27,7 +28,7 @@
             <button
                 class="settings kanban-settings-button"
                 type="button"
-                aria-label="Kanban settings"
+                aria-label="Board settings"
                 aria-expanded="false"
                 aria-controls="kanban-settings-panel"
             >⚙</button>
@@ -65,7 +66,7 @@
                     </button>
                 </div>
                 <p class="background-image-status" aria-live="polite">
-                    This image is also used as the project cover.
+                    Also used as the cover unless a separate cover is chosen.
                 </p>
             </div>
 
@@ -170,6 +171,7 @@
     </dialog>
 
     <script src="js/kanban.js"></script>
+    <script src="js/view-switcher.js"></script>
 </body>
 
 </html>

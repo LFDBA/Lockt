@@ -6,6 +6,8 @@ const PROJECT_METADATA_STORAGE_KEY = "lockt:kanban-project-metadata";
 const PROJECT_SETTINGS_STORAGE_KEY = "lockt:kanban-project-settings";
 const NEW_PROJECT_FOCUS_STORAGE_KEY = "lockt:new-kanban-project";
 const HOME_INITIALIZED_STORAGE_KEY = "lockt:home-initialized";
+const MAX_COVER_IMAGE_BYTES = 15 * 1024 * 1024;
+const MAX_COVER_IMAGE_DIMENSION = 1200;
 const PROJECT_COLOURS = ["#c88f6b", "#9eae94", "#b9a078", "#8fa9a3"];
 const creationDateFormatter = new Intl.DateTimeFormat("en-NZ", {
     day: "2-digit",
@@ -51,9 +53,29 @@ const HOME_TEMPLATES = {
 };
 
 const projectContextMenu = document.querySelector(".project-context-menu");
+const changeProjectCoverMenuItem = document.querySelector(
+    ".change-project-cover-menu-item"
+);
 const deleteProjectMenuItem = document.querySelector(
     ".delete-project-menu-item"
 );
+const projectViewDialog = document.querySelector(".project-view-dialog");
+const projectViewName = document.querySelector(".project-view-name");
+const projectViewButtons = [
+    ...document.querySelectorAll("[data-project-view]")
+];
+const closeProjectViewButton = document.querySelector(".close-project-view");
+const projectCoverDialog = document.querySelector(".project-cover-dialog");
+const projectCoverName = document.querySelector(".project-cover-name");
+const projectCoverImageInput = document.querySelector(
+    ".project-cover-image-input"
+);
+const projectCoverStatus = document.querySelector(".project-cover-status");
+const projectCoverColourButtons = [
+    ...document.querySelectorAll("[data-cover-colour]")
+];
+const resetProjectCoverButton = document.querySelector(".reset-project-cover");
+const closeProjectCoverButton = document.querySelector(".close-project-cover");
 const deleteProjectDialog = document.querySelector(".delete-project-dialog");
 const deleteProjectForm = document.querySelector(".delete-project-form");
 const deleteProjectName = document.querySelector(".delete-project-name");
@@ -68,6 +90,8 @@ const confirmProjectDeletion = document.querySelector(
 );
 
 let contextProjectName = "";
+let pendingViewProjectName = "";
+let pendingCoverProjectName = "";
 let pendingDeletionProjectName = "";
 
 function createTemplateList(title, backgroundColor) {
@@ -106,6 +130,7 @@ function saveProjectNames(projectNames) {
     }
 }
 
+
 function readProjectMetadata() {
     try {
         const metadata = JSON.parse(
@@ -130,6 +155,114 @@ function saveProjectMetadata(metadata) {
         return true;
     } catch (error) {
         console.warn("Unable to save project metadata", error);
+        return false;
+    }
+}
+
+function readProjectSettings() {
+    try {
+        const settings = JSON.parse(
+            window.localStorage.getItem(PROJECT_SETTINGS_STORAGE_KEY) || "{}"
+        );
+
+        return settings && typeof settings === "object" && !Array.isArray(settings)
+            ? settings
+            : {};
+    } catch (error) {
+        console.warn("Unable to read project settings", error);
+        return {};
+    }
+}
+
+function getProjectBackgroundImage(projectName) {
+    const backgroundImage = readProjectSettings()[projectName]?.backgroundImage;
+
+    return typeof backgroundImage === "string" &&
+        backgroundImage.startsWith("data:image/")
+        ? backgroundImage
+        : "";
+}
+
+function getProjectCover(projectName) {
+    const projectSettings = readProjectSettings()[projectName] || {};
+    const customCoverImage = projectSettings.coverImage;
+    const customCoverColour = projectSettings.coverColour;
+
+    if (
+        projectSettings.coverMode === "image" &&
+        typeof customCoverImage === "string" &&
+        customCoverImage.startsWith("data:image/")
+    ) {
+        return { type: "image", value: customCoverImage, custom: true };
+    }
+
+    if (
+        projectSettings.coverMode === "colour" &&
+        typeof customCoverColour === "string" &&
+        /^#[0-9a-f]{6}$/i.test(customCoverColour)
+    ) {
+        return { type: "colour", value: customCoverColour, custom: true };
+    }
+
+    const backgroundImage = getProjectBackgroundImage(projectName);
+
+    return backgroundImage
+        ? { type: "image", value: backgroundImage, custom: false }
+        : { type: "default", value: "", custom: false };
+}
+
+function saveProjectCover(projectName, coverMode, value, fileName = "") {
+    try {
+        const settings = readProjectSettings();
+        const projectSettings = { ...(settings[projectName] || {}) };
+
+        delete projectSettings.coverImage;
+        delete projectSettings.coverImageName;
+        delete projectSettings.coverColour;
+
+        projectSettings.coverMode = coverMode;
+
+        if (coverMode === "image") {
+            projectSettings.coverImage = value;
+            projectSettings.coverImageName = fileName;
+        } else if (coverMode === "colour") {
+            projectSettings.coverColour = value;
+        }
+
+        window.localStorage.setItem(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            JSON.stringify({
+                ...settings,
+                [projectName]: projectSettings
+            })
+        );
+        return true;
+    } catch (error) {
+        console.warn("Unable to save the project cover", error);
+        return false;
+    }
+}
+
+function resetProjectCover(projectName) {
+    try {
+        const settings = readProjectSettings();
+        const projectSettings = { ...(settings[projectName] || {}) };
+
+        delete projectSettings.coverMode;
+        delete projectSettings.coverImage;
+        delete projectSettings.coverImageName;
+        delete projectSettings.coverColour;
+
+        window.localStorage.setItem(
+            PROJECT_SETTINGS_STORAGE_KEY,
+            JSON.stringify({
+                ...settings,
+                [projectName]: projectSettings
+            })
+        );
+        return true;
+    } catch (error) {
+        console.warn("Unable to reset the project cover", error);
         return false;
     }
 }
@@ -294,6 +427,129 @@ function getProjectActivityTime(projectName) {
     return Number.isNaN(activityTime) ? 0 : activityTime;
 }
 
+function loadCoverImage(file) {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        const objectUrl = URL.createObjectURL(file);
+
+        image.addEventListener("load", () => {
+            URL.revokeObjectURL(objectUrl);
+            resolve(image);
+        });
+        image.addEventListener("error", () => {
+            URL.revokeObjectURL(objectUrl);
+            reject(new Error("That image could not be read."));
+        });
+        image.src = objectUrl;
+    });
+}
+
+async function optimizeCoverImage(file) {
+    if (!file.type.startsWith("image/")) {
+        throw new Error("Please choose an image file.");
+    }
+
+    if (file.size > MAX_COVER_IMAGE_BYTES) {
+        throw new Error("Please choose an image smaller than 15 MB.");
+    }
+
+    const image = await loadCoverImage(file);
+    const scale = Math.min(
+        1,
+        MAX_COVER_IMAGE_DIMENSION / Math.max(image.width, image.height)
+    );
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+
+    if (!context) {
+        throw new Error("This browser cannot prepare that image.");
+    }
+
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+
+    let quality = 0.82;
+    let optimizedImage = canvas.toDataURL("image/webp", quality);
+
+    while (optimizedImage.length > 900_000 && quality > 0.52) {
+        quality -= 0.08;
+        optimizedImage = canvas.toDataURL("image/webp", quality);
+    }
+
+    if (!optimizedImage.startsWith("data:image/")) {
+        throw new Error("That image could not be prepared.");
+    }
+
+    return optimizedImage;
+}
+
+function refreshHomeProjects() {
+    const searchTerm = document.querySelector(".project-search input")?.value || "";
+
+    renderHomeProjects();
+    filterHomeCards(searchTerm);
+}
+
+function syncProjectCoverDialog(projectName) {
+    const projectSettings = readProjectSettings()[projectName] || {};
+    const projectCover = getProjectCover(projectName);
+
+    projectCoverColourButtons.forEach((colourButton) => {
+        colourButton.setAttribute(
+            "aria-pressed",
+            String(
+                projectSettings.coverMode === "colour" &&
+                    colourButton.dataset.coverColour === projectCover.value
+            )
+        );
+    });
+
+    if (!projectCoverStatus) return;
+
+    if (projectCover.custom && projectCover.type === "image") {
+        projectCoverStatus.textContent = `Using ${projectSettings.coverImageName || "a custom image"}.`;
+    } else if (projectCover.custom && projectCover.type === "colour") {
+        projectCoverStatus.textContent = "Using a preset colour.";
+    } else if (projectCover.type === "image") {
+        projectCoverStatus.textContent = "Currently using the board background.";
+    } else {
+        projectCoverStatus.textContent = "Currently using the default project colour.";
+    }
+}
+
+function openProjectViewDialog(projectName) {
+    if (!projectViewDialog || !projectViewName) return;
+
+    pendingViewProjectName = projectName;
+    projectViewName.textContent = projectName;
+    projectViewDialog.showModal();
+
+    requestAnimationFrame(() => {
+        projectViewButtons[0]?.focus();
+    });
+}
+
+function openProjectCoverDialog(projectName) {
+    if (!projectCoverDialog || !projectCoverName) return;
+
+    pendingCoverProjectName = projectName;
+    projectCoverName.textContent = projectName;
+
+    if (projectCoverImageInput) {
+        projectCoverImageInput.value = "";
+        projectCoverImageInput.disabled = false;
+    }
+
+    syncProjectCoverDialog(projectName);
+    projectCoverDialog.showModal();
+
+    requestAnimationFrame(() => {
+        projectCoverColourButtons[0]?.focus();
+    });
+}
+
 function closeProjectContextMenu() {
     if (!projectContextMenu) return;
 
@@ -302,7 +558,7 @@ function closeProjectContextMenu() {
 }
 
 function openProjectContextMenu(event, projectName, projectCard) {
-    if (!projectContextMenu || !deleteProjectMenuItem) return;
+    if (!projectContextMenu) return;
 
     event.preventDefault();
     contextProjectName = projectName;
@@ -325,7 +581,7 @@ function openProjectContextMenu(event, projectName, projectCard) {
 
     projectContextMenu.style.left = `${left}px`;
     projectContextMenu.style.top = `${top}px`;
-    deleteProjectMenuItem.focus();
+    (changeProjectCoverMenuItem || deleteProjectMenuItem)?.focus();
 }
 
 function openDeleteProjectDialog(projectName) {
@@ -421,6 +677,7 @@ function createProjectCard(projectName, projectIndex) {
     const title = document.createElement("span");
     const creationDate = document.createElement("time");
     const createdAt = getProjectCreationDate(projectName);
+    const projectCover = getProjectCover(projectName);
 
     link.className = "home-project-card";
     link.dataset.searchableName = projectName;
@@ -428,18 +685,30 @@ function createProjectCard(projectName, projectIndex) {
     link.href = `kanban.html?project=${encodeURIComponent(projectName)}`;
     link.style.setProperty(
         "--project-colour",
-        PROJECT_COLOURS[projectIndex % PROJECT_COLOURS.length] ||
-            getProjectColour(projectName)
+        projectCover.type === "colour"
+            ? projectCover.value
+            : PROJECT_COLOURS[projectIndex % PROJECT_COLOURS.length] ||
+                  getProjectColour(projectName)
     );
     preview.className = "project-card-preview";
+
+    if (projectCover.type === "image") {
+        preview.classList.add("has-project-cover");
+        preview.style.setProperty(
+            "--project-cover-image",
+            `url("${projectCover.value}")`
+        );
+    }
+
     title.className = "project-card-title";
     title.textContent = projectName;
     creationDate.className = "project-created-date";
     creationDate.dateTime = createdAt;
     creationDate.textContent = creationDateFormatter.format(new Date(createdAt));
 
-    link.addEventListener("click", () => {
-        selectProject(projectName);
+    link.addEventListener("click", (event) => {
+        event.preventDefault();
+        openProjectViewDialog(projectName);
     });
     link.addEventListener("contextmenu", (event) => {
         openProjectContextMenu(event, projectName, link);
@@ -538,6 +807,142 @@ document.querySelectorAll(".template-card").forEach((templateCard) => {
 
 document.querySelector(".project-search input")?.addEventListener("input", (event) => {
     filterHomeCards(event.currentTarget.value);
+});
+
+projectViewButtons.forEach((viewButton) => {
+    viewButton.addEventListener("click", () => {
+        const projectName = pendingViewProjectName;
+        const selectedView = viewButton.dataset.projectView;
+
+        if (
+            !projectName ||
+            !["kanban", "gantt", "whiteboard"].includes(selectedView)
+        ) {
+            return;
+        }
+
+        selectProject(projectName);
+        projectViewDialog?.close();
+        window.location.href = `${selectedView}.html?project=${encodeURIComponent(projectName)}`;
+    });
+});
+
+closeProjectViewButton?.addEventListener("click", () => {
+    projectViewDialog?.close();
+});
+
+projectViewDialog?.addEventListener("click", (event) => {
+    if (event.target === projectViewDialog) {
+        projectViewDialog.close();
+    }
+});
+
+projectViewDialog?.addEventListener("close", () => {
+    pendingViewProjectName = "";
+});
+
+changeProjectCoverMenuItem?.addEventListener("click", () => {
+    const projectName = contextProjectName;
+
+    closeProjectContextMenu();
+
+    if (projectName) {
+        openProjectCoverDialog(projectName);
+    }
+});
+
+projectCoverImageInput?.addEventListener("change", async () => {
+    const selectedFile = projectCoverImageInput.files?.[0];
+    const projectName = pendingCoverProjectName;
+
+    if (!selectedFile || !projectName) return;
+
+    projectCoverImageInput.disabled = true;
+
+    if (projectCoverStatus) {
+        projectCoverStatus.textContent = "Preparing image…";
+    }
+
+    try {
+        const optimizedImage = await optimizeCoverImage(selectedFile);
+        const wasSaved = saveProjectCover(
+            projectName,
+            "image",
+            optimizedImage,
+            selectedFile.name
+        );
+
+        if (!wasSaved) {
+            throw new Error("There is not enough browser storage for that image.");
+        }
+
+        projectCoverDialog?.close();
+        refreshHomeProjects();
+    } catch (error) {
+        if (projectCoverStatus) {
+            projectCoverStatus.textContent =
+                error instanceof Error
+                    ? error.message
+                    : "Unable to use that image.";
+        }
+    } finally {
+        projectCoverImageInput.disabled = false;
+        projectCoverImageInput.value = "";
+    }
+});
+
+projectCoverColourButtons.forEach((colourButton) => {
+    colourButton.addEventListener("click", () => {
+        if (!pendingCoverProjectName) return;
+
+        const wasSaved = saveProjectCover(
+            pendingCoverProjectName,
+            "colour",
+            colourButton.dataset.coverColour || ""
+        );
+
+        if (!wasSaved) {
+            if (projectCoverStatus) {
+                projectCoverStatus.textContent = "Unable to save that cover colour.";
+            }
+            return;
+        }
+
+        projectCoverDialog?.close();
+        refreshHomeProjects();
+    });
+});
+
+resetProjectCoverButton?.addEventListener("click", () => {
+    if (!pendingCoverProjectName) return;
+
+    if (!resetProjectCover(pendingCoverProjectName)) {
+        if (projectCoverStatus) {
+            projectCoverStatus.textContent = "Unable to reset this cover.";
+        }
+        return;
+    }
+
+    projectCoverDialog?.close();
+    refreshHomeProjects();
+});
+
+closeProjectCoverButton?.addEventListener("click", () => {
+    projectCoverDialog?.close();
+});
+
+projectCoverDialog?.addEventListener("click", (event) => {
+    if (event.target === projectCoverDialog) {
+        projectCoverDialog.close();
+    }
+});
+
+projectCoverDialog?.addEventListener("close", () => {
+    pendingCoverProjectName = "";
+
+    if (projectCoverImageInput) {
+        projectCoverImageInput.value = "";
+    }
 });
 
 deleteProjectMenuItem?.addEventListener("click", () => {
