@@ -956,10 +956,16 @@ function getCardData(card) {
 function getListData(list) {
     const titleInput = list.querySelector(".list-title");
     const cardsContainer = list.querySelector(".list-cards");
+    const themeNeutralBackground = list.style
+        .getPropertyValue("--lockt-list-colour")
+        .trim();
 
     return {
         title: titleInput?.value || "",
-        backgroundColor: window.getComputedStyle(list).backgroundColor,
+        backgroundColor:
+            themeNeutralBackground ||
+            list.style.backgroundColor ||
+            window.getComputedStyle(list).backgroundColor,
         cards: cardsContainer
             ? [...cardsContainer.querySelectorAll(".card")].map(getCardData)
             : []

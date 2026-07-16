@@ -1,0 +1,996 @@
+:root {
+  --lockt-dark-page: #0f0d0a;
+  --lockt-dark-surface: #1c1813;
+  --lockt-dark-raised: #272119;
+  --lockt-dark-control: #332a22;
+  --lockt-dark-text: #eee0cf;
+  --lockt-dark-muted: #b9aa99;
+  --lockt-dark-line: rgba(238, 224, 207, 0.18);
+}
+
+.home-header {
+  position: relative;
+}
+
+.theme-toggle,
+.focus-mode-button,
+.focus-mode-exit {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 5px 14px 2px;
+  border: 1px solid rgba(59, 43, 35, 0.2);
+  border-radius: 999px;
+  background: #e4ddd4;
+  color: #3b2b23;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+  transition: background-color 140ms ease, transform 140ms ease, box-shadow 140ms ease;
+}
+
+.theme-toggle:hover,
+.theme-toggle:focus-visible,
+.focus-mode-button:hover,
+.focus-mode-button:focus-visible,
+.focus-mode-exit:hover,
+.focus-mode-exit:focus-visible {
+  outline: 2px solid rgba(59, 43, 35, 0.45);
+  outline-offset: 2px;
+  background: #d8cec2;
+  transform: translateY(-1px);
+}
+
+.theme-toggle-icon {
+  display: inline-grid;
+  width: 19px;
+  height: 19px;
+  place-items: center;
+  font-family: system-ui, sans-serif;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.home-theme-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.experience-setting-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.experience-setting-actions .theme-toggle,
+.experience-setting-actions .focus-mode-button {
+  width: 100%;
+  min-height: 42px;
+  padding-inline: 9px;
+  font-size: 15px;
+}
+
+.focus-mode-exit {
+  position: fixed;
+  z-index: 5000;
+  top: 18px;
+  right: 18px;
+  border-color: rgba(255, 255, 255, 0.35);
+  background: rgba(59, 43, 35, 0.9);
+  color: #fffaf4;
+  box-shadow: 0 8px 24px rgba(31, 23, 18, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.focus-mode-exit[hidden] {
+  display: none;
+}
+
+/* Focus mode keeps the work surface available and removes navigation/mutation noise. */
+body.is-focus-mode .top-bar,
+body.is-focus-mode .kanban-settings-panel,
+body.is-focus-mode .view-switcher,
+body.is-focus-mode #trash,
+body.is-focus-mode .add-list,
+body.is-focus-mode .add-card,
+body.is-focus-mode .add-task,
+body.is-focus-mode .card-options,
+body.is-focus-mode .list-header span,
+body.is-focus-mode .kanban-task-toggle {
+  display: none !important;
+}
+
+body.is-focus-mode .content:not(.whiteboard-page) {
+  padding-top: 30px;
+}
+
+body.is-focus-mode .list,
+body.is-focus-mode .card {
+  cursor: default;
+}
+
+body.is-focus-mode .list-title,
+body.is-focus-mode .gantt-bar {
+  pointer-events: none;
+}
+
+body.is-focus-mode .whiteboard-page {
+  padding-top: 12px;
+}
+
+/* Dark theme */
+html[data-theme="dark"] body {
+  background-color: var(--lockt-dark-page);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .content {
+  background-color: var(--lockt-dark-surface);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .content.has-board-background {
+  background-image:
+    linear-gradient(rgba(20, 17, 13, 0.48), rgba(20, 17, 13, 0.48)),
+    var(--board-background-image);
+}
+
+html[data-theme="dark"] .project-title,
+html[data-theme="dark"] .list-title,
+html[data-theme="dark"] .kanban-settings-button,
+html[data-theme="dark"] .whiteboard-shell-button {
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .project-title:focus {
+  border-bottom-color: rgba(238, 224, 207, 0.55);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+
+html[data-theme="dark"] .theme-toggle,
+html[data-theme="dark"] .focus-mode-button {
+  border-color: var(--lockt-dark-line);
+  background: var(--lockt-dark-control);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .theme-toggle:hover,
+html[data-theme="dark"] .theme-toggle:focus-visible,
+html[data-theme="dark"] .focus-mode-button:hover,
+html[data-theme="dark"] .focus-mode-button:focus-visible {
+  outline-color: rgba(238, 224, 207, 0.55);
+  background: #41352a;
+}
+
+html[data-theme="dark"] .kanban-settings-panel,
+html[data-theme="dark"] .project-context-menu,
+html[data-theme="dark"] .view-switcher-menu {
+  border-color: var(--lockt-dark-line);
+  background: rgba(39, 33, 25, 0.98);
+  color: var(--lockt-dark-text);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.45);
+}
+
+html[data-theme="dark"] .kanban-settings-panel p,
+html[data-theme="dark"] .empty-grid-message,
+html[data-theme="dark"] .project-cover-status,
+html[data-theme="dark"] .delete-project-hint,
+html[data-theme="dark"] .delete-board-hint {
+  color: var(--lockt-dark-muted);
+}
+
+html[data-theme="dark"] .kanban-setting-section,
+html[data-theme="dark"] .rename-project-setting,
+html[data-theme="dark"] .delete-project-menu-item {
+  border-color: var(--lockt-dark-line);
+}
+
+html[data-theme="dark"] .urgency-threshold-field input,
+html[data-theme="dark"] .delete-board-confirmation,
+html[data-theme="dark"] .delete-project-confirmation,
+html[data-theme="dark"] .card-input,
+html[data-theme="dark"] .card-date-input,
+html[data-theme="dark"] .card-title-editor,
+html[data-theme="dark"] .card-date-editor {
+  border-color: var(--lockt-dark-line);
+  background: #17130f;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .rename-project-button,
+html[data-theme="dark"] .background-image-upload,
+html[data-theme="dark"] .remove-background-image,
+html[data-theme="dark"] .cancel-board-deletion,
+html[data-theme="dark"] .cancel-project-deletion,
+html[data-theme="dark"] .close-project-view,
+html[data-theme="dark"] .close-project-cover,
+html[data-theme="dark"] .reset-project-cover {
+  border-color: var(--lockt-dark-line);
+  background: var(--lockt-dark-control);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .rename-project-button:hover,
+html[data-theme="dark"] .background-image-upload:hover,
+html[data-theme="dark"] .remove-background-image:hover,
+html[data-theme="dark"] .change-project-cover-menu-item:hover,
+html[data-theme="dark"] .change-project-cover-menu-item:focus-visible {
+  background: #43372c;
+}
+
+html[data-theme="dark"] .delete-board-dialog,
+html[data-theme="dark"] .delete-project-dialog,
+html[data-theme="dark"] .project-view-dialog,
+html[data-theme="dark"] .project-cover-dialog {
+  background: var(--lockt-dark-raised);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .project-view-options button {
+  color: #241d18;
+}
+
+html[data-theme="dark"] .project-view-options span {
+  color: #55483f;
+}
+
+html[data-theme="dark"] .project-cover-colours button {
+  border-color: var(--lockt-dark-raised);
+}
+
+html[data-theme="dark"] .project-cover-colours button[aria-pressed="true"] {
+  outline-color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .change-project-cover-menu-item {
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .delete-project-menu-item {
+  color: #eaa59d;
+}
+
+html[data-theme="dark"] .delete-project-menu-item:hover,
+html[data-theme="dark"] .delete-project-menu-item:focus-visible {
+  background: rgba(168, 70, 61, 0.24);
+}
+
+/* Dark home */
+html[data-theme="dark"] .project-card-title {
+  background: #211b16;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .has-project-cover .project-created-date {
+  background: rgba(29, 24, 19, 0.84);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .project-search {
+  border-color: var(--lockt-dark-line);
+  background: var(--lockt-dark-raised);
+}
+
+html[data-theme="dark"] .project-search input::placeholder {
+  color: var(--lockt-dark-muted);
+}
+
+html[data-theme="dark"] .template-card {
+  color: #2d251f;
+  filter: brightness(0.78) saturate(1.08);
+}
+
+html[data-theme="dark"] .new-project .project-card-preview {
+  border-color: #9c6f56;
+  background: linear-gradient(to bottom right, #3b3027, #231c17);
+}
+
+html[data-theme="dark"] .new-project .project-card-title {
+  background: #9b664d;
+  color: #fffaf4;
+}
+
+/* Dark Kanban */
+html[data-theme="dark"] .todo {
+  background-color: #463459;
+}
+
+html[data-theme="dark"] .doing {
+  background-color: #294b55;
+}
+
+html[data-theme="dark"] .done {
+  background-color: #4a294b;
+}
+
+html[data-theme="dark"] .kanban-body .list {
+  background-color: color-mix(
+    in srgb,
+    var(--lockt-list-colour, #b8a4cc) 52%,
+    #17130f
+  ) !important;
+}
+
+html[data-theme="dark"] .list-header span,
+html[data-theme="dark"] .group-chevron {
+  color: var(--lockt-dark-text);
+  border-color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .card,
+html[data-theme="dark"] .card-composer,
+html[data-theme="dark"] .list-ghost {
+  border-color: rgba(174, 196, 163, 0.48);
+  background-color: #211c17;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .urgent {
+  border-color: #cb7b73;
+  box-shadow: 0 4px 12px rgba(203, 90, 82, 0.34);
+}
+
+html[data-theme="dark"] .date,
+html[data-theme="dark"] .card-options,
+html[data-theme="dark"] .add-card {
+  color: var(--lockt-dark-muted);
+}
+
+html[data-theme="dark"] .add-card:hover,
+html[data-theme="dark"] .add-card:focus-visible,
+html[data-theme="dark"] .card-options:hover {
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .add-list {
+  background: #342a21;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] #trash {
+  background: #2c251e;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] #card-editor-backdrop {
+  background: rgba(7, 6, 5, 0.58);
+}
+
+/* Dark Gantt */
+html[data-theme="dark"] .group-sidebar {
+  background: color-mix(in srgb, var(--group-colour) 52%, #17130f);
+}
+
+html[data-theme="dark"] .group-timeline::before {
+  filter: brightness(0.52) saturate(1.1);
+}
+
+html[data-theme="dark"] .group-toggle,
+html[data-theme="dark"] .add-task {
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .task-label {
+  border-color: rgba(174, 196, 163, 0.5);
+  background: #211c17;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .week-label small {
+  color: var(--lockt-dark-muted);
+}
+
+html[data-theme="dark"] .gantt-bar.is-complete {
+  --bar-colour: #665a4d;
+}
+
+html[data-theme="dark"] .task-resize-handle::after {
+  background: rgba(238, 224, 207, 0.65);
+}
+
+html[data-theme="dark"] .group-timeline-scroll {
+  scrollbar-color: rgba(238, 224, 207, 0.35) transparent;
+}
+
+/* Dark Whiteboard chrome. The actual canvas intentionally remains white. */
+html[data-theme="dark"] .whiteboard-shell {
+  border-color: var(--lockt-dark-line);
+  background: #17130f;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .whiteboard-toolbar {
+  border-color: var(--lockt-dark-line);
+  background: #272119;
+}
+
+html[data-theme="dark"] .whiteboard-toolbar .toolbar-button,
+html[data-theme="dark"] .whiteboard-toolbar .toolbar-label,
+html[data-theme="dark"] .whiteboard-toolbar .zoom-readout,
+html[data-theme="dark"] .whiteboard-toolbar output {
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .whiteboard-toolbar .toolbar-button {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="dark"] .whiteboard-toolbar .toolbar-button:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+html[data-theme="dark"] .whiteboard-toolbar .toolbar-button.active {
+  background: #58766a;
+}
+
+html[data-theme="dark"] .toolbar-divider {
+  background: var(--lockt-dark-line);
+}
+
+html[data-theme="dark"] .sticky-controls,
+html[data-theme="dark"] .highlighter-controls {
+  background: rgba(255, 255, 255, 0.055);
+}
+
+html[data-theme="dark"] .kanban-task-tray {
+  border-color: var(--lockt-dark-line);
+  background: rgba(39, 33, 25, 0.98);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .kanban-task-tray-header {
+  border-color: var(--lockt-dark-line);
+}
+
+html[data-theme="dark"] .kanban-task-tray-header p,
+html[data-theme="dark"] .kanban-task-group-title,
+html[data-theme="dark"] .kanban-source-task-meta,
+html[data-theme="dark"] .kanban-task-empty {
+  color: var(--lockt-dark-muted);
+}
+
+html[data-theme="dark"] .kanban-source-task {
+  border-color: var(--lockt-dark-line);
+  background: #1b1712;
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .kanban-source-task:hover,
+html[data-theme="dark"] .kanban-source-task:focus-visible {
+  background: #2b241c;
+}
+
+html[data-theme="dark"] .kanban-task-tray-close {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .overlay-status,
+html[data-theme="dark"] .save-state {
+  border-color: var(--lockt-dark-line);
+  background: rgba(39, 33, 25, 0.93);
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .board-viewport {
+  background: #fff;
+}
+
+html[data-theme="dark"] .board-item,
+html[data-theme="dark"] .board-item input,
+html[data-theme="dark"] .board-item textarea {
+  color: #3b2b23;
+}
+
+/* Shared switcher in dark mode */
+html[data-theme="dark"] .view-switcher {
+  color: var(--lockt-dark-text);
+}
+
+html[data-theme="dark"] .view-switcher-toggle {
+  border-color: var(--lockt-dark-line);
+  background: rgba(39, 33, 25, 0.96);
+}
+
+html[data-theme="dark"] .view-switcher-toggle:hover,
+html[data-theme="dark"] .view-switcher-toggle:focus-visible,
+html[data-theme="dark"] .view-switcher-option:hover,
+html[data-theme="dark"] .view-switcher-option:focus-visible {
+  background: #3a3027;
+}
+
+html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
+  background: #3f574d;
+}
+
+/* Mobile home */
+@media (max-width: 520px) {
+  .home-page {
+    padding: 24px 16px 42px;
+  }
+
+  .home-header {
+    min-height: 43px;
+    align-items: center;
+    margin-bottom: 30px;
+  }
+
+  .home-header h1 {
+    font-size: 42px;
+  }
+
+  .home-theme-toggle {
+    top: 2px;
+    min-width: 42px;
+    padding-inline: 10px;
+  }
+
+  .home-theme-toggle .theme-toggle-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .project-grid,
+  .template-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 12px;
+  }
+
+  .home-project-card,
+  .template-card {
+    max-width: none;
+  }
+
+  .project-created-date {
+    top: 7px;
+    left: 9px;
+    font-size: 11px;
+  }
+
+  .project-card-title {
+    right: 8px;
+    bottom: 7px;
+    left: 8px;
+    height: 22px;
+    padding-inline: 6px;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .template-card span {
+    top: 8px;
+    left: 9px;
+    font-size: 13px;
+  }
+
+  .templates,
+  .all-boards {
+    margin-top: 44px;
+  }
+
+  .section-heading {
+    gap: 12px;
+  }
+
+  .project-search {
+    width: 112px;
+  }
+}
+
+/* Mobile Kanban */
+@media (max-width: 760px) {
+  body.kanban-body,
+  body.gantt-body {
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .kanban-body .content,
+  .gantt-body .content.gantt-page {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+    min-height: 100vh;
+    padding: 22px 16px 82px;
+    border-radius: 0;
+  }
+
+  .kanban-body .top-bar,
+  .gantt-body .top-bar,
+  .whiteboard-body .top-bar {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) 42px;
+    gap: 8px;
+    margin-bottom: 26px;
+  }
+
+  .kanban-body .back,
+  .kanban-body .settings,
+  .gantt-body .back,
+  .gantt-body .settings {
+    font-size: 38px;
+    line-height: 1;
+  }
+
+  .kanban-body .project-title,
+  .gantt-body .project-title {
+    width: 100%;
+    min-width: 0;
+    font-size: clamp(31px, 10vw, 42px);
+    line-height: 1;
+  }
+
+  .kanban-body .kanban-settings-panel,
+  .gantt-body .kanban-settings-panel,
+  .whiteboard-body .kanban-settings-panel {
+    position: fixed;
+    z-index: 1200;
+    top: 70px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+    max-height: calc(100dvh - 84px);
+  }
+
+  body:has(.kanban-settings-panel:not([hidden])) .view-switcher,
+  .kanban-body:has(.kanban-settings-panel:not([hidden])) #trash {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .kanban-body .lists-row {
+    display: grid;
+    width: 100%;
+    gap: 22px;
+  }
+
+  .kanban-body .list,
+  .kanban-body .add-list {
+    box-sizing: border-box;
+    width: min(100%, 326px);
+    max-width: 326px;
+    flex-basis: auto;
+    justify-self: center;
+  }
+
+  .kanban-body .list {
+    position: relative;
+    padding: 0;
+    border-radius: 0;
+    background-color: transparent !important;
+    box-shadow: none;
+  }
+
+  html[data-theme="dark"] .kanban-body .list {
+    background-color: transparent !important;
+  }
+
+  .kanban-body .list-header {
+    margin-bottom: 7px;
+    padding: 0 2px;
+  }
+
+  .kanban-body .list-header span {
+    display: none;
+  }
+
+  .kanban-body .list-title {
+    font-size: 25px;
+  }
+
+  .kanban-body .list-cards {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    min-height: 48px;
+    padding: 12px;
+    border-radius: 14px;
+    background-color: var(--lockt-list-colour, #b8a4cc);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2);
+  }
+
+  html[data-theme="dark"] .kanban-body .list-cards {
+    background-color: color-mix(
+      in srgb,
+      var(--lockt-list-colour, #b8a4cc) 52%,
+      #17130f
+    );
+  }
+
+  .kanban-body .card,
+  .kanban-body .card:last-child {
+    width: 100%;
+    min-width: 0;
+    min-height: 78px;
+    margin: 0;
+    padding: 12px 13px;
+    border-width: 2px;
+    border-radius: 15px;
+  }
+
+  .kanban-body .card p {
+    margin-bottom: 8px;
+    font-size: 15px;
+  }
+
+  .kanban-body .date {
+    font-size: 13px;
+  }
+
+  .kanban-body .card-composer,
+  .kanban-body .list-ghost,
+  .kanban-body .list-placeholder {
+    grid-column: 1 / -1;
+  }
+
+  .kanban-body .add-card {
+    position: absolute;
+    top: -1px;
+    right: 0;
+    width: 31px;
+    min-height: 31px;
+    padding: 0;
+    overflow: hidden;
+    border-radius: 50%;
+    color: transparent;
+    font-size: 0;
+    text-align: center;
+  }
+
+  .kanban-body .add-card::before {
+    color: #3b2b23;
+    font-size: 25px;
+    line-height: 31px;
+    content: "+";
+  }
+
+  html[data-theme="dark"] .kanban-body .add-card::before {
+    color: var(--lockt-dark-text);
+  }
+
+  .kanban-body .add-list {
+    height: 55px;
+    font-size: 24px;
+  }
+
+  .kanban-body .card-editor-active.is-open {
+    transform:
+      translate(var(--card-editor-translate-x), var(--card-editor-translate-y))
+      scale(1.42);
+  }
+
+  #trash {
+    right: 16px;
+    bottom: 16px;
+    width: 52px;
+    height: 52px;
+  }
+
+  .focus-mode-exit {
+    top: auto;
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+/* Mobile Gantt keeps each list's independent horizontal timeline. */
+@media (max-width: 760px) {
+  .gantt-body .content.gantt-page {
+    padding-right: 10px;
+    padding-left: 10px;
+  }
+
+  .gantt-page .top-bar {
+    margin-bottom: 24px;
+  }
+
+  .gantt-chart {
+    --sidebar-width: 108px;
+    --task-row-height: 44px;
+    --timeline-width: max(560px, calc(var(--week-count) * 140px));
+  }
+
+  .gantt-group {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+    margin-bottom: 22px;
+  }
+
+  .group-sidebar {
+    padding: 8px 7px 6px;
+    border-radius: 12px 0 0 12px;
+  }
+
+  .group-toggle {
+    min-height: 35px;
+    padding: 0 7px;
+    font-size: 20px;
+  }
+
+  .group-chevron {
+    width: 9px;
+    height: 9px;
+    margin-left: 7px;
+    border-width: 0 2px 2px 0;
+  }
+
+  .task-label {
+    height: 36px;
+    padding: 0 8px;
+    border-width: 2px;
+    border-radius: 14px;
+    font-size: 13px;
+  }
+
+  .add-task {
+    min-height: 33px;
+    padding-inline: 7px;
+    font-size: 16px;
+  }
+
+  .list-week-labels {
+    top: -2px;
+    opacity: 1;
+    transform: none;
+  }
+
+  .week-labels {
+    min-height: 40px;
+    font-size: 19px;
+  }
+
+  .week-label small {
+    margin-top: 2px;
+    font-size: 11px;
+  }
+
+  .group-timeline-scroll {
+    margin-top: -2px;
+    padding-top: 2px;
+    overscroll-behavior-inline: contain;
+  }
+
+  .group-timeline::before {
+    top: 42px;
+  }
+
+  .gantt-bar {
+    top: calc(46px + var(--row) * var(--task-row-height));
+    height: 29px;
+  }
+
+  .task-connector {
+    top: calc(61px + var(--top-row) * var(--task-row-height));
+  }
+}
+
+/* Mobile Whiteboard */
+@media (max-width: 760px) {
+  html,
+  body.whiteboard-body {
+    width: 100%;
+    min-width: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .content.whiteboard-page {
+    width: 100%;
+    height: 100dvh;
+    min-width: 0;
+    min-height: 0;
+    padding: 12px 10px 12px;
+  }
+
+  .whiteboard-top-bar {
+    min-height: 45px;
+    margin-bottom: 10px;
+  }
+
+  .whiteboard-top-bar .project-title {
+    width: 100%;
+    min-width: 0;
+    font-size: clamp(30px, 9vw, 38px);
+  }
+
+  .whiteboard-top-bar .back,
+  .whiteboard-top-bar .settings {
+    font-size: 34px;
+  }
+
+  .whiteboard-shell {
+    border-width: 1px;
+    border-radius: 16px;
+  }
+
+  .whiteboard-toolbar {
+    min-height: 56px;
+    gap: 7px;
+    padding: 8px;
+    scroll-snap-type: x proximity;
+    overscroll-behavior-inline: contain;
+  }
+
+  .whiteboard-toolbar > * {
+    scroll-snap-align: start;
+  }
+
+  .toolbar-button {
+    min-height: 38px;
+    padding-inline: 10px;
+    font-size: 15px;
+  }
+
+  .stroke-control > span,
+  .sticky-controls > .toolbar-label,
+  .highlighter-controls .toolbar-label > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+  }
+
+  .toolbar-slider {
+    width: 62px;
+  }
+
+  .toolbar-spacer {
+    flex-basis: 4px;
+  }
+
+  .board-overlay {
+    padding: 8px;
+  }
+
+  .overlay-status {
+    display: none;
+  }
+
+  .save-state {
+    padding: 5px 8px 3px;
+    font-size: 12px;
+  }
+
+  .kanban-task-tray {
+    top: 8px;
+    bottom: 8px;
+    left: 8px;
+    width: calc(100% - 16px);
+  }
+
+  .kanban-task-toggle {
+    top: 8px;
+    left: 8px;
+  }
+}
+
+@media (max-width: 360px) {
+  .experience-setting-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .kanban-body .card-editor-active.is-open {
+    transform:
+      translate(var(--card-editor-translate-x), var(--card-editor-translate-y))
+      scale(1.3);
+  }
+
+  .project-search {
+    width: 102px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle,
+  .focus-mode-button,
+  .focus-mode-exit {
+    transition: none;
+  }
+}

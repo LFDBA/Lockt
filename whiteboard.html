@@ -4,10 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Whiteboard</title>
+    <script src="js/theme-focus.js"></script>
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/kanban.css">
     <link rel="stylesheet" href="css/whiteboard.css">
     <link rel="stylesheet" href="css/view-switcher.css">
+    <link rel="stylesheet" href="css/theme-responsive.css">
 </head>
 <body class="whiteboard-body">
     <div class="content whiteboard-page">
@@ -73,6 +75,20 @@
                 <p class="background-image-status" aria-live="polite">
                     Applies to Kanban, Gantt, and the fallback cover. The whiteboard always stays white.
                 </p>
+            </div>
+
+            <div class="kanban-setting-section experience-setting">
+                <span class="kanban-setting-label">Appearance</span>
+                <div class="experience-setting-actions">
+                    <button class="theme-toggle" type="button">
+                        <span class="theme-toggle-icon" aria-hidden="true"></span>
+                        <span class="theme-toggle-label">Dark mode</span>
+                    </button>
+                    <button class="focus-mode-button" type="button">
+                        Enter focus mode
+                    </button>
+                </div>
+                <p>Focus mode hides navigation while keeping the drawing tools ready.</p>
             </div>
 
             <div class="kanban-setting-section kanban-danger-zone">
@@ -161,6 +177,8 @@
             </section>
         </main>
     </div>
+
+    <button class="focus-mode-exit" type="button" hidden>Exit focus</button>
 
     <dialog class="delete-board-dialog" aria-labelledby="delete-board-title">
         <form class="delete-board-form">
