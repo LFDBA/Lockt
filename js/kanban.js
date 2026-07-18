@@ -3,6 +3,7 @@ const template = document.querySelector("#list-template");
 const listsRow = document.querySelector(".lists-row");
 const trash = document.querySelector("#trash");
 const alertBox = document.querySelector("#alert");
+const undoDeleteButton = document.querySelector(".undo-delete");
 const cardEditorBackdrop = document.querySelector("#card-editor-backdrop");
 const projectTitleInput = document.querySelector(".project-title");
 const settingsButton = document.querySelector(".kanban-settings-button");
@@ -40,6 +41,7 @@ let activeCardEditor = null;
 let allowBoardNavigation = false;
 let dragAutoScrollFrame = 0;
 let dragAutoScrollVelocity = 0;
+let deleteAlertTimeout = 0;
 
 const colours = ["#b8a4cc", "#a3c9c9", "#8fa99d", "#a7b99a", "#c9a3a3"];
 let lastListColour = null;
@@ -892,6 +894,40 @@ function recordAction(action) {
     actionHistory.push(action);
 }
 
+function undoLastAction() {
+    const lastAction = actionHistory.pop();
+
+    if (!lastAction) return false;
+
+    if (lastAction.type === "card-delete") {
+        insertNodeAt(
+            lastAction.parent,
+            lastAction.card,
+            lastAction.nextSibling
+        );
+        saveBoardState();
+        return true;
+    }
+
+    if (lastAction.type === "list-delete") {
+        insertNodeAt(
+            lastAction.parent,
+            lastAction.list,
+            lastAction.nextSibling
+        );
+        saveBoardState();
+        return true;
+    }
+
+    if (lastAction.type === "list-add" && lastAction.list.isConnected) {
+        lastAction.list.remove();
+        saveBoardState();
+        return true;
+    }
+
+    return false;
+}
+
 function insertNodeAt(parent, node, nextSibling = null) {
     if (!parent || !node) return;
 
@@ -1507,11 +1543,17 @@ function clearCardDrag() {
 }
 
 function showDeleteAlert() {
+    window.clearTimeout(deleteAlertTimeout);
     alertBox.classList.add("show");
 
-    setTimeout(() => {
+    deleteAlertTimeout = window.setTimeout(() => {
         alertBox.classList.remove("show");
     }, 5000);
+}
+
+function hideDeleteAlert() {
+    window.clearTimeout(deleteAlertTimeout);
+    alertBox.classList.remove("show");
 }
 
 function getPointerDropTarget(clientX, clientY) {
@@ -2202,36 +2244,14 @@ document.addEventListener("keydown", (event) => {
 
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
-
-        const lastAction = actionHistory.pop();
-
-        if (!lastAction) return;
-
-        if (lastAction.type === "card-delete") {
-            insertNodeAt(
-                lastAction.parent,
-                lastAction.card,
-                lastAction.nextSibling
-            );
-            saveBoardState();
-            return;
-        }
-
-        if (lastAction.type === "list-delete") {
-            insertNodeAt(
-                lastAction.parent,
-                lastAction.list,
-                lastAction.nextSibling
-            );
-            saveBoardState();
-            return;
-        }
-
-        if (lastAction.type === "list-add" && lastAction.list.isConnected) {
-            lastAction.list.remove();
-            saveBoardState();
-        }
+        undoLastAction();
+        hideDeleteAlert();
     }
+});
+
+undoDeleteButton?.addEventListener("click", () => {
+    undoLastAction();
+    hideDeleteAlert();
 });
 
 function setupCard(card) {

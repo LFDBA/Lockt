@@ -159,12 +159,15 @@
 
     <button class="focus-mode-exit" type="button" hidden>Exit focus</button>
 
-    <div id="trash">
-        🗑️
+    <div id="trash" aria-label="Delete item">
+        <svg class="trash-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M4 7h16M9 7V4h6v3m-9 0 1 14h10l1-14M10 11v6m4-6v6"/>
+        </svg>
     </div>
 
-    <div id="alert">
-        <p>Press ctrl+z to restore the last removed card or list</p>
+    <div id="alert" role="status" aria-live="polite">
+        <p>Item removed</p>
+        <button class="undo-delete" type="button">Undo</button>
     </div>
 
     <div id="card-editor-backdrop" hidden></div>

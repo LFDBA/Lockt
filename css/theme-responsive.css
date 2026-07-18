@@ -852,7 +852,44 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
   }
 
   #trash.drag-over {
+    background-color: #ffe0dd;
+    color: #d9423a;
+    box-shadow:
+      0 0 0 5px rgba(217, 66, 58, 0.24),
+      0 9px 18px rgba(122, 35, 30, 0.32);
     transform: translateX(-50%) scale(1.1);
+  }
+
+  html[data-theme="dark"] #trash.drag-over {
+    background-color: #52231f;
+    color: #ff7168;
+    box-shadow:
+      0 0 0 5px rgba(255, 113, 104, 0.22),
+      0 9px 18px rgba(0, 0, 0, 0.42);
+  }
+
+  #alert {
+    top: auto;
+    right: 16px;
+    bottom: -90px;
+    left: 16px;
+    justify-content: space-between;
+    width: auto;
+    transform: none;
+    font-size: 17px;
+  }
+
+  #alert.show {
+    top: auto;
+    right: 16px;
+    bottom: 18px;
+    left: 16px;
+    transform: none;
+  }
+
+  .undo-delete {
+    min-width: 72px;
+    min-height: 42px;
   }
 
   .focus-mode-exit {
@@ -954,7 +991,7 @@ html[data-theme="dark"] .view-switcher-option[aria-current="page"] {
 
 /* Mobile Whiteboard */
 @media (max-width: 760px) {
-  html,
+  html:has(body.whiteboard-body),
   body.whiteboard-body {
     width: 100%;
     min-width: 0;

@@ -104,6 +104,8 @@
         highlighterOpacityReadout: document.querySelector("#highlighterOpacityReadout"),
         stickyControls: document.querySelector("#stickyControls"),
         stickyPalette: document.querySelector("#stickyPalette"),
+        imageImportButton: document.querySelector("#imageImportButton"),
+        imageImportInput: document.querySelector("#imageImportInput"),
         kanbanTaskToggle: document.querySelector("#kanbanTaskToggle"),
         kanbanTaskCount: document.querySelector("#kanbanTaskCount"),
         kanbanTaskTray: document.querySelector("#kanbanTaskTray"),
@@ -715,6 +717,10 @@
         });
 
         dom.undoButton.addEventListener("click", undoLastAction);
+        dom.imageImportButton?.addEventListener("click", () => {
+            dom.imageImportInput?.click();
+        });
+        dom.imageImportInput?.addEventListener("change", handleImageImport);
         dom.zoomInButton.addEventListener("click", () => zoomAtScreenPoint(1.16));
         dom.zoomOutButton.addEventListener("click", () => zoomAtScreenPoint(1 / 1.16));
         dom.resetViewButton.addEventListener("click", resetView);
@@ -952,7 +958,13 @@
             );
             item.height = clamp(
                 interaction.itemHeight + point.y - interaction.startWorldY,
-                item.type === "note" ? 160 : item.type === "task" ? 170 : 120,
+                item.type === "note"
+                    ? 160
+                    : item.type === "task"
+                        ? 170
+                        : item.type === "image"
+                            ? 164
+                            : 120,
                 MAX_ITEM_SIZE
             );
             updateItemElement(item);
@@ -2324,6 +2336,81 @@
         setStatus(`Added “${item.title}” from Kanban.`);
     }
 
+    async function handleImageImport() {
+        const file = dom.imageImportInput?.files?.[0];
+        if (!file) return;
+
+        if (dom.imageImportButton) dom.imageImportButton.disabled = true;
+        setStatus(`Preparing ${file.name || "image"}…`);
+
+        try {
+            const preparedImage = await optimizeImageFile(file);
+            createImageAtViewportCenter(preparedImage, file.name);
+        } catch (error) {
+            setStatus(
+                error instanceof Error
+                    ? error.message
+                    : "That image could not be imported."
+            );
+        } finally {
+            if (dom.imageImportInput) dom.imageImportInput.value = "";
+            if (dom.imageImportButton) dom.imageImportButton.disabled = false;
+        }
+    }
+
+    function createImageAtViewportCenter(imageData, fileName = "Image") {
+        const viewportRect = dom.viewport.getBoundingClientRect();
+        const centre = screenToWorld(
+            viewportRect.width * 0.5,
+            viewportRect.height * 0.5
+        );
+        const maximumWidth = Math.max(
+            220,
+            Math.min(520, (viewportRect.width * 0.72) / state.view.zoom)
+        );
+        const maximumContentHeight = Math.max(
+            180,
+            Math.min(420, (viewportRect.height * 0.62) / state.view.zoom)
+        );
+        const naturalWidth = Math.max(1, imageData.width);
+        const naturalHeight = Math.max(1, imageData.height);
+        const displayScale = Math.min(
+            1,
+            maximumWidth / naturalWidth,
+            maximumContentHeight / naturalHeight
+        );
+        const width = clamp(
+            Math.round(naturalWidth * displayScale),
+            180,
+            maximumWidth
+        );
+        const contentHeight = clamp(
+            Math.round(naturalHeight * displayScale),
+            120,
+            maximumContentHeight
+        );
+        const height = contentHeight + 44;
+        const imageItem = {
+            id: nextId("item"),
+            type: "image",
+            x: centre.x - width * 0.5,
+            y: centre.y - height * 0.5,
+            width,
+            height,
+            src: imageData.dataUrl,
+            name: String(fileName || "Image"),
+            naturalWidth,
+            naturalHeight
+        };
+
+        state.items.push(imageItem);
+        state.selectedItemId = imageItem.id;
+        pushHistoryAction({ type: "add-item", itemId: imageItem.id });
+        setTool("select");
+        renderBoardItems();
+        setStatus(`${imageItem.name} added to the whiteboard.`);
+    }
+
     function renderBoardItems() {
         dom.worldLayer.innerHTML = "";
         updateWorldTransform();
@@ -2394,6 +2481,25 @@
                     </div>
                     <button type="button" class="resize-handle" data-resize-handle aria-label="Resize task note"></button>
                 `;
+            } else if (item.type === "image") {
+                element.innerHTML = `
+                    <div class="item-topbar" data-drag-handle>
+                        <div class="topbar-meta">
+                            <span class="topbar-chip">Image</span>
+                            <span class="topbar-title">${escapeHtml(item.name || "Imported image")}</span>
+                        </div>
+                        <button type="button" class="item-delete" data-delete-item aria-label="Delete image">×</button>
+                    </div>
+                    <div class="image-card-content">
+                        <img class="imported-image" draggable="false" alt="">
+                    </div>
+                    <button type="button" class="resize-handle" data-resize-handle aria-label="Resize image"></button>
+                `;
+                const image = element.querySelector(".imported-image");
+                if (image instanceof HTMLImageElement) {
+                    image.src = item.src;
+                    image.alt = item.name || "Imported image";
+                }
             } else {
                 element.style.setProperty(
                     "--text-item-color",
@@ -2784,7 +2890,12 @@
     function sanitizeItems(items) {
         if (!Array.isArray(items)) return [];
         return items.flatMap((item) => {
-            if (!item || !["note", "text", "task"].includes(item.type)) return [];
+            if (
+                !item ||
+                !["note", "text", "task", "image"].includes(item.type)
+            ) {
+                return [];
+            }
             const base = {
                 id: typeof item.id === "string" ? item.id : nextId("item"),
                 type: item.type,
@@ -2794,12 +2905,42 @@
                 height: clamp(
                     finiteNumber(
                         item.height,
-                        item.type === "note" ? 250 : item.type === "task" ? 220 : 144
+                        item.type === "note"
+                            ? 250
+                            : item.type === "task"
+                                ? 220
+                                : item.type === "image"
+                                    ? 344
+                                    : 144
                     ),
-                    item.type === "note" ? 160 : item.type === "task" ? 170 : 120,
+                    item.type === "note"
+                        ? 160
+                        : item.type === "task"
+                            ? 170
+                            : item.type === "image"
+                                ? 164
+                                : 120,
                     MAX_ITEM_SIZE
                 )
             };
+
+            if (item.type === "image") {
+                const src = String(item.src || "");
+                if (!src.startsWith("data:image/")) return [];
+                return [{
+                    ...base,
+                    src,
+                    name: String(item.name || "Imported image"),
+                    naturalWidth: Math.max(
+                        1,
+                        finiteNumber(item.naturalWidth, base.width)
+                    ),
+                    naturalHeight: Math.max(
+                        1,
+                        finiteNumber(item.naturalHeight, base.height - 44)
+                    )
+                }];
+            }
 
             if (item.type === "note") {
                 const colour = getStickyColour(item.colourId);
@@ -3465,7 +3606,7 @@
         });
     }
 
-    async function optimizeBackgroundImage(file) {
+    async function optimizeImageFile(file) {
         if (!file.type.startsWith("image/")) {
             throw new Error("Please choose an image file.");
         }
@@ -3494,7 +3635,16 @@
         if (!optimizedImage.startsWith("data:image/")) {
             throw new Error("That image could not be prepared.");
         }
-        return optimizedImage;
+        return {
+            dataUrl: optimizedImage,
+            width: canvas.width,
+            height: canvas.height
+        };
+    }
+
+    async function optimizeBackgroundImage(file) {
+        const image = await optimizeImageFile(file);
+        return image.dataUrl;
     }
 
     function setupDeletion() {

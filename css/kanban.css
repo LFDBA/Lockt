@@ -814,27 +814,63 @@ body.card-editor-open {
   transition: transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
 }
 
+.trash-icon {
+  width: 29px;
+  height: 29px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transition: color 0.14s ease, filter 0.14s ease;
+}
+
 #trash.drag-over {
-  background-color: #f28b824f;
-  color: #fff;
-  box-shadow: 0 8px 15px rgba(0,0,0,0.25);
+  background-color: #ffe0dd;
+  color: #d9423a;
+  box-shadow: 0 0 0 4px rgba(217, 66, 58, 0.2), 0 8px 15px rgba(0,0,0,0.25);
   transform: scale(1.1);
 }
 
 #alert {
   position: fixed;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  gap: 16px;
   transition: opacity 0.14s ease, top 0.14s ease, scale 0.14s ease;
   top: -80px;
   left: 50%;
   transform: translateX(-50%);
   background-color: #f28b82;
   color: #fff;
-  padding: 0px 24px;
+  padding: 10px 12px 10px 20px;
   border-radius: 8px;
   box-shadow: 0 5px 12px rgba(0,0,0,0.25);
   font-size: 16px;
   opacity: 0;
   scale: 0.90;
+}
+
+#alert p {
+  margin: 0;
+}
+
+.undo-delete {
+  padding: 5px 13px 3px;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.undo-delete:hover,
+.undo-delete:focus-visible {
+  background: #fff;
+  color: #a9342e;
 }
 
 #alert.show {
@@ -845,7 +881,7 @@ body.card-editor-open {
   transform: translateX(-50%);
   background-color: #f28b82;
   color: #fff;
-  padding: 0px 24px;
+  padding: 10px 12px 10px 20px;
   border-radius: 8px;
   box-shadow: 0 5px 12px rgba(0,0,0,0.25);
   font-size: 16px;
