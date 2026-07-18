@@ -90,6 +90,11 @@
         });
 
         if (!session?.user) {
+            if (rawGet(CLOUD_OWNER_KEY)) {
+                await clearLocalProjectCache();
+                rawRemove(CLOUD_OWNER_KEY);
+                rawRemove(CLOUD_PENDING_KEY);
+            }
             setCloudStatus("local", "Saved on this device");
             dispatchAuthChange("INITIAL_SESSION");
             return;
@@ -329,38 +334,40 @@
         const board = readLocalBoard(name);
         const createdAt = normalizeDate(metadata.createdAt) || new Date().toISOString();
         const openedAt = normalizeDate(metadata.lastOpenedAt) || createdAt;
+        const projectId = createUuid();
+        const localSettings = readJson(SETTINGS_KEY, {})[name] || {};
+        const localWhiteboard = await readLocalWhiteboard(name);
+        const settings = await prepareSettingsForCloud(
+            projectId,
+            localSettings
+        );
+        const whiteboard = localWhiteboard
+            ? await prepareWhiteboardForCloud(projectId, localWhiteboard)
+            : null;
         const { data, error } = await client
             .from("projects")
             .insert({
+                id: projectId,
                 user_id: session.user.id,
                 name,
                 board,
-                settings: {},
+                whiteboard,
+                settings,
                 created_at: createdAt,
                 opened_at: openedAt
             })
             .select("id,user_id,name,board,whiteboard,settings,created_at,opened_at,updated_at,version")
             .single();
 
-        if (error) throw error;
-
-        const localSettings = readJson(SETTINGS_KEY, {})[name] || {};
-        const localWhiteboard = await readLocalWhiteboard(name);
-        const settings = await prepareSettingsForCloud(
-            data.id,
-            localSettings
-        );
-        const whiteboard = localWhiteboard
-            ? await prepareWhiteboardForCloud(data.id, localWhiteboard)
-            : null;
-        const { data: completed, error: updateError } = await client
-            .from("projects")
-            .update({ settings, whiteboard })
-            .eq("id", data.id)
-            .select("id,user_id,name,board,whiteboard,settings,created_at,opened_at,updated_at,version")
-            .single();
-        if (updateError) throw updateError;
-        return completed;
+        if (error) {
+            try {
+                await removeProjectAssets(projectId);
+            } catch (cleanupError) {
+                console.warn("Unable to clean up an incomplete project upload", cleanupError);
+            }
+            throw error;
+        }
+        return data;
     }
 
     async function applyCloudProjects(rows) {
@@ -463,9 +470,8 @@
                 await updateCloudProjectFromLocal(row, name);
             }
 
-            const currentIds = new Set(Object.values(idMap));
             for (const row of [...cloudRows]) {
-                if (localNameSet.has(row.name) || currentIds.has(row.id)) continue;
+                if (localNameSet.has(row.name)) continue;
                 await removeCloudProjectRow(row);
                 cloudRows = cloudRows.filter((entry) => entry.id !== row.id);
                 delete idMap[row.name];
@@ -486,13 +492,30 @@
     }
 
     async function updateCloudProjectFromLocal(row, name) {
+        const previousAssetPaths = projectAssetPaths(
+            row.settings,
+            row.whiteboard
+        );
         const metadata = readJson(METADATA_KEY, {})[name] || {};
         const localSettings = readJson(SETTINGS_KEY, {})[name] || {};
-        const settings = await prepareSettingsForCloud(row.id, localSettings);
+        const settings = await prepareSettingsForCloud(
+            row.id,
+            localSettings,
+            row.settings
+        );
+        const localWhiteboard = await readLocalWhiteboard(name);
+        const whiteboard = localWhiteboard
+            ? await prepareWhiteboardForCloud(
+                row.id,
+                localWhiteboard,
+                row.whiteboard
+            )
+            : null;
         const payload = {
             name,
             board: readLocalBoard(name),
             settings,
+            whiteboard,
             opened_at: normalizeDate(metadata.lastOpenedAt) || row.opened_at
         };
         const { data, error } = await client
@@ -502,6 +525,619 @@
             .select("id,user_id,name,board,whiteboard,settings,created_at,opened_at,updated_at,version")
             .single();
         if (error) throw error;
+        await removeStaleAssets(
+            previousAssetPaths,
+            projectAssetPaths(data.settings, data.whiteboard)
+        );
         Object.assign(row, data);
     }
 
+    async function prepareSettingsForCloud(
+        projectId,
+        localSettings,
+        previousSettings = null
+    ) {
+        const settings = { ...(localSettings || {}) };
+        await prepareSettingImage(
+            settings,
+            projectId,
+            "backgroundImage",
+            "backgroundAssetPath",
+            "backgroundAssetFingerprint",
+            previousSettings
+        );
+        await prepareSettingImage(
+            settings,
+            projectId,
+            "coverImage",
+            "coverAssetPath",
+            "coverAssetFingerprint",
+            previousSettings
+        );
+        return settings;
+    }
+
+    async function prepareSettingImage(
+        settings,
+        projectId,
+        dataKey,
+        pathKey,
+        fingerprintKey,
+        previousSettings
+    ) {
+        const dataUrl = settings[dataKey];
+
+        if (!isImageDataUrl(dataUrl)) {
+            delete settings[dataKey];
+            delete settings[pathKey];
+            delete settings[fingerprintKey];
+            return;
+        }
+
+        const fingerprint = fingerprintDataUrl(dataUrl);
+        if (
+            !settings[pathKey] &&
+            previousSettings?.[fingerprintKey] === fingerprint &&
+            previousSettings?.[pathKey]
+        ) {
+            settings[pathKey] = previousSettings[pathKey];
+            settings[fingerprintKey] = fingerprint;
+        }
+        if (
+            settings[fingerprintKey] !== fingerprint ||
+            !settings[pathKey]
+        ) {
+            const path = await uploadDataUrlAsset(
+                projectId,
+                dataKey === "coverImage" ? "cover" : "background",
+                dataUrl,
+                fingerprint
+            );
+            settings[pathKey] = path;
+            settings[fingerprintKey] = fingerprint;
+        }
+        delete settings[dataKey];
+    }
+
+    async function hydrateSettingsFromCloud(cloudSettings) {
+        const settings = { ...(cloudSettings || {}) };
+        await hydrateSettingImage(settings, "backgroundImage", "backgroundAssetPath");
+        await hydrateSettingImage(settings, "coverImage", "coverAssetPath");
+        return settings;
+    }
+
+    async function hydrateSettingImage(settings, dataKey, pathKey) {
+        if (!settings[pathKey]) return;
+        try {
+            settings[dataKey] = await downloadAssetAsDataUrl(settings[pathKey]);
+        } catch (error) {
+            console.warn(`Unable to download ${dataKey}`, error);
+        }
+    }
+
+    async function prepareWhiteboardForCloud(
+        projectId,
+        snapshot,
+        previousSnapshot = null
+    ) {
+        const cloudSnapshot = cloneValue(snapshot);
+        if (!Array.isArray(cloudSnapshot?.items)) return cloudSnapshot;
+        const previousItems = new Map(
+            Array.isArray(previousSnapshot?.items)
+                ? previousSnapshot.items.map((item) => [item?.id, item])
+                : []
+        );
+
+        for (const item of cloudSnapshot.items) {
+            if (item?.type !== "image") continue;
+            if (isImageDataUrl(item.src)) {
+                const fingerprint = fingerprintDataUrl(item.src);
+                const previousItem = previousItems.get(item.id);
+                if (
+                    !item.assetPath &&
+                    previousItem?.assetFingerprint === fingerprint &&
+                    previousItem?.assetPath
+                ) {
+                    item.assetPath = previousItem.assetPath;
+                    item.assetFingerprint = fingerprint;
+                }
+                if (
+                    item.assetFingerprint !== fingerprint ||
+                    !item.assetPath
+                ) {
+                    item.assetPath = await uploadDataUrlAsset(
+                        projectId,
+                        `whiteboard-${item.id || "image"}`,
+                        item.src,
+                        fingerprint
+                    );
+                    item.assetFingerprint = fingerprint;
+                }
+                delete item.src;
+            }
+        }
+        return cloudSnapshot;
+    }
+
+    function whiteboardAssetPaths(snapshot) {
+        if (!Array.isArray(snapshot?.items)) return [];
+        return snapshot.items
+            .filter((item) => item?.type === "image" && item.assetPath)
+            .map((item) => item.assetPath);
+    }
+
+    function projectAssetPaths(settings, whiteboard) {
+        return [
+            settings?.backgroundAssetPath,
+            settings?.coverAssetPath,
+            ...whiteboardAssetPaths(whiteboard)
+        ].filter(Boolean);
+    }
+
+    async function removeStaleAssets(previousPaths, currentPaths) {
+        const activePaths = new Set(currentPaths);
+        await removeAssets(
+            previousPaths.filter((path) => !activePaths.has(path))
+        );
+    }
+
+    async function hydrateWhiteboardFromCloud(snapshot) {
+        const localSnapshot = cloneValue(snapshot);
+        if (!Array.isArray(localSnapshot?.items)) return localSnapshot;
+
+        await Promise.all(localSnapshot.items.map(async (item) => {
+            if (item?.type !== "image" || !item.assetPath) return;
+            try {
+                item.src = await downloadAssetAsDataUrl(item.assetPath);
+            } catch (error) {
+                console.warn("Unable to restore a Whiteboard image", error);
+            }
+        }));
+        return localSnapshot;
+    }
+
+    async function uploadDataUrlAsset(projectId, kind, dataUrl, fingerprint) {
+        const response = await fetch(dataUrl);
+        const blob = await response.blob();
+        const extension = mimeExtension(blob.type);
+        const safeKind = String(kind).replace(/[^a-z0-9_-]/gi, "-");
+        const path = `${session.user.id}/${projectId}/${safeKind}-${fingerprint}.${extension}`;
+        const { error } = await client.storage
+            .from(ASSET_BUCKET)
+            .upload(path, blob, {
+                upsert: true,
+                contentType: blob.type || "image/webp",
+                cacheControl: "3600"
+            });
+        if (error) throw error;
+        return path;
+    }
+
+    async function downloadAssetAsDataUrl(path) {
+        const { data, error } = await client.storage
+            .from(ASSET_BUCKET)
+            .download(path);
+        if (error) throw error;
+        return blobToDataUrl(data);
+    }
+
+    function blobToDataUrl(blob) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result || ""));
+            reader.onerror = () => reject(
+                reader.error || new Error("Unable to read downloaded image")
+            );
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    async function removeAssets(paths, { strict = false } = {}) {
+        const uniquePaths = [...new Set(paths.filter(Boolean))];
+        if (!uniquePaths.length) return;
+        for (let index = 0; index < uniquePaths.length; index += 100) {
+            const { error } = await client.storage
+                .from(ASSET_BUCKET)
+                .remove(uniquePaths.slice(index, index + 100));
+            if (!error) continue;
+            if (strict) throw error;
+            console.warn("Unable to remove superseded assets", error);
+        }
+    }
+
+    async function removeCloudProjectRow(row) {
+        await removeProjectAssets(row.id);
+        const { error } = await client.from("projects").delete().eq("id", row.id);
+        if (error) throw error;
+    }
+
+    async function removeProjectAssets(projectId) {
+        const folder = `${session.user.id}/${projectId}`;
+        const paths = [];
+        let offset = 0;
+        while (true) {
+            const { data, error } = await client.storage
+                .from(ASSET_BUCKET)
+                .list(folder, { limit: 1000, offset });
+            if (error) throw error;
+            const entries = data || [];
+            paths.push(...entries.map((entry) => `${folder}/${entry.name}`));
+            if (entries.length < 1000) break;
+            offset += entries.length;
+        }
+        await removeAssets(paths, { strict: true });
+    }
+
+    function isImageDataUrl(value) {
+        return typeof value === "string" && /^data:image\//i.test(value);
+    }
+
+    function fingerprintDataUrl(value) {
+        let hash = 2166136261;
+        const stride = Math.max(1, Math.floor(value.length / 8192));
+        for (let index = 0; index < value.length; index += stride) {
+            hash ^= value.charCodeAt(index);
+            hash = Math.imul(hash, 16777619);
+        }
+        return `${(hash >>> 0).toString(16)}-${value.length}`;
+    }
+
+    function mimeExtension(type) {
+        if (type === "image/png") return "png";
+        if (type === "image/jpeg") return "jpg";
+        if (type === "image/gif") return "gif";
+        return "webp";
+    }
+
+    function cloneValue(value) {
+        if (typeof structuredClone === "function") {
+            return structuredClone(value);
+        }
+        return JSON.parse(JSON.stringify(value));
+    }
+
+    function createUuid() {
+        if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+        return "10000000-1000-4000-8000-100000000000".replace(/[018]/g, (char) => (
+            Number(char) ^ window.crypto.getRandomValues(new Uint8Array(1))[0]
+            & 15 >> Number(char) / 4
+        ).toString(16));
+    }
+
+    function normalizeName(value) {
+        return typeof value === "string" ? value.trim() : "";
+    }
+
+    function normalizeDate(value) {
+        if (typeof value !== "string" || !value) return "";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+    }
+
+    function sanitizeBoard(value) {
+        return value && typeof value === "object" && Array.isArray(value.lists)
+            ? value
+            : { lists: [] };
+    }
+
+    function readLocalBoard(name) {
+        try {
+            const rawValue =
+                rawGet(name) ||
+                (name === DEFAULT_PROJECT_NAME ? rawGet(LEGACY_BOARD_KEY) : null);
+            return sanitizeBoard(rawValue ? JSON.parse(rawValue) : null);
+        } catch (error) {
+            return { lists: [] };
+        }
+    }
+
+    function getLocalProjectNames() {
+        const names = new Set();
+        const savedNames = readJson(PROJECTS_KEY, []);
+        if (Array.isArray(savedNames)) {
+            savedNames.map(normalizeName).filter(Boolean).forEach((name) => {
+                names.add(name);
+            });
+        }
+        for (let index = 0; index < window.localStorage.length; index += 1) {
+            const key = window.localStorage.key(index);
+            if (!key || isReservedStorageKey(key)) continue;
+            if (looksLikeBoard(rawGet(key))) names.add(key);
+        }
+        return [...names];
+    }
+
+    function isReservedStorageKey(key) {
+        return (
+            key.startsWith("lockt:") ||
+            key.startsWith("sb-") ||
+            key === LEGACY_BOARD_KEY
+        );
+    }
+
+    async function clearLocalProjectCache() {
+        applyingCloudState = true;
+        try {
+            getLocalProjectNames().forEach((name) => {
+                rawRemove(name);
+                rawRemove(`${WHITEBOARD_FALLBACK_PREFIX}${name}`);
+            });
+            [
+                PROJECTS_KEY,
+                METADATA_KEY,
+                SETTINGS_KEY,
+                ACTIVE_PROJECT_KEY,
+                LEGACY_BOARD_KEY,
+                HOME_INITIALIZED_KEY,
+                CLOUD_IDS_KEY,
+                CLOUD_PENDING_KEY
+            ].forEach(rawRemove);
+            await clearLocalWhiteboards();
+        } finally {
+            applyingCloudState = false;
+        }
+    }
+
+    function openWhiteboardDatabase() {
+        return new Promise((resolve, reject) => {
+            if (!("indexedDB" in window)) {
+                reject(new Error("IndexedDB is unavailable"));
+                return;
+            }
+            const request = window.indexedDB.open(WHITEBOARD_DATABASE, 1);
+            request.onupgradeneeded = () => {
+                if (!request.result.objectStoreNames.contains(WHITEBOARD_STORE)) {
+                    request.result.createObjectStore(WHITEBOARD_STORE, {
+                        keyPath: "projectName"
+                    });
+                }
+            };
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error);
+        });
+    }
+
+    async function whiteboardRequest(mode, operation) {
+        const database = await openWhiteboardDatabase();
+        return new Promise((resolve, reject) => {
+            const transaction = database.transaction(WHITEBOARD_STORE, mode);
+            const request = operation(transaction.objectStore(WHITEBOARD_STORE));
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error || transaction.error);
+            transaction.oncomplete = () => database.close();
+            transaction.onabort = () => {
+                database.close();
+                reject(transaction.error);
+            };
+        });
+    }
+
+    async function readLocalWhiteboard(name) {
+        try {
+            const record = await whiteboardRequest(
+                "readonly",
+                (store) => store.get(name)
+            );
+            if (record?.snapshot) return record.snapshot;
+        } catch (error) {
+            console.warn("Unable to read local Whiteboard during sync", error);
+        }
+        try {
+            const fallback = rawGet(`${WHITEBOARD_FALLBACK_PREFIX}${name}`);
+            return fallback ? JSON.parse(fallback) : null;
+        } catch (error) {
+            return null;
+        }
+    }
+
+    async function writeLocalWhiteboard(name, snapshot) {
+        try {
+            await whiteboardRequest("readwrite", (store) => store.put({
+                projectName: name,
+                updatedAt: snapshot.updatedAt || new Date().toISOString(),
+                snapshot
+            }));
+            rawRemove(`${WHITEBOARD_FALLBACK_PREFIX}${name}`);
+        } catch (error) {
+            rawSet(
+                `${WHITEBOARD_FALLBACK_PREFIX}${name}`,
+                JSON.stringify(snapshot)
+            );
+        }
+    }
+
+    async function deleteLocalWhiteboard(name) {
+        try {
+            await whiteboardRequest("readwrite", (store) => store.delete(name));
+        } catch (error) {
+            // The fallback is still removed below.
+        }
+        rawRemove(`${WHITEBOARD_FALLBACK_PREFIX}${name}`);
+    }
+
+    async function clearLocalWhiteboards() {
+        try {
+            await whiteboardRequest("readwrite", (store) => store.clear());
+        } catch (error) {
+            console.warn("Unable to clear the local Whiteboard cache", error);
+        }
+    }
+
+    async function saveWhiteboard(name, snapshot) {
+        await ready;
+        if (!session?.user || !schemaReady || !name || !snapshot) return;
+        await queueSync({ immediate: true });
+        const idMap = readJson(CLOUD_IDS_KEY, {});
+        const projectId = idMap[name];
+        if (!projectId) return;
+
+        setCloudStatus("saving", "Saving Whiteboard to your account…");
+        try {
+            const row = cloudRows.find((entry) => entry.id === projectId);
+            const previousAssetPaths = whiteboardAssetPaths(row?.whiteboard);
+            const whiteboard = await prepareWhiteboardForCloud(
+                projectId,
+                snapshot,
+                row?.whiteboard
+            );
+            const { data, error } = await client
+                .from("projects")
+                .update({ whiteboard })
+                .eq("id", projectId)
+                .select("id,user_id,name,board,whiteboard,settings,created_at,opened_at,updated_at,version")
+                .single();
+            if (error) throw error;
+            await removeStaleAssets(
+                previousAssetPaths,
+                whiteboardAssetPaths(data.whiteboard)
+            );
+            if (row) Object.assign(row, data);
+            setCloudStatus("saved", "Saved in your account");
+        } catch (error) {
+            console.warn("Unable to sync the Whiteboard", error);
+            rawSet(CLOUD_PENDING_KEY, "true");
+            setCloudStatus("error", "Whiteboard changes are waiting to sync");
+        }
+    }
+
+    async function renameProject(previousName, nextName) {
+        await ready;
+        if (!session?.user || !schemaReady) return;
+        const idMap = readJson(CLOUD_IDS_KEY, {});
+        const projectId = idMap[previousName];
+        if (!projectId) {
+            await queueSync({ immediate: true });
+            return;
+        }
+        const { error } = await client
+            .from("projects")
+            .update({ name: nextName })
+            .eq("id", projectId);
+        if (error) {
+            console.warn("Unable to rename the cloud project", error);
+            rawSet(CLOUD_PENDING_KEY, "true");
+            return;
+        }
+        applyingCloudState = true;
+        delete idMap[previousName];
+        idMap[nextName] = projectId;
+        rawSet(CLOUD_IDS_KEY, JSON.stringify(idMap));
+        applyingCloudState = false;
+        const row = cloudRows.find((entry) => entry.id === projectId);
+        if (row) row.name = nextName;
+    }
+
+    async function deleteProject(name) {
+        await ready;
+        if (!session?.user || !schemaReady) return;
+        const idMap = readJson(CLOUD_IDS_KEY, {});
+        const projectId = idMap[name];
+        if (!projectId) return;
+        const row = cloudRows.find((entry) => entry.id === projectId) || {
+            id: projectId,
+            name
+        };
+        try {
+            await removeCloudProjectRow(row);
+            cloudRows = cloudRows.filter((entry) => entry.id !== projectId);
+            applyingCloudState = true;
+            delete idMap[name];
+            rawSet(CLOUD_IDS_KEY, JSON.stringify(idMap));
+            applyingCloudState = false;
+            setCloudStatus("saved", "Project deleted from your account");
+        } catch (error) {
+            console.warn("Unable to delete cloud project", error);
+            rawSet(CLOUD_PENDING_KEY, "true");
+            setCloudStatus("error", "Project deletion is waiting to sync");
+        }
+    }
+
+    function configuredAuthRedirectUrl(parameters = "") {
+        const base = config.siteUrl || new URL("index.html", window.location.href).href;
+        const url = new URL("index.html", base);
+        if (parameters) url.search = parameters.replace(/^\?/, "");
+        return url.href;
+    }
+
+    function localHomeUrl(parameters = "") {
+        const url = new URL("index.html", window.location.href);
+        if (parameters) url.search = parameters.replace(/^\?/, "");
+        else url.search = "";
+        url.hash = "";
+        return url.href;
+    }
+
+    async function signIn(email, password) {
+        await ready;
+        const { data, error } = await client.auth.signInWithPassword({
+            email: String(email || "").trim(),
+            password: String(password || "")
+        });
+        if (error) throw error;
+        session = data.session;
+        window.location.href = localHomeUrl();
+    }
+
+    async function signUp(email, password) {
+        await ready;
+        const { data, error } = await client.auth.signUp({
+            email: String(email || "").trim(),
+            password: String(password || ""),
+            options: { emailRedirectTo: configuredAuthRedirectUrl() }
+        });
+        if (error) throw error;
+        if (data.session) {
+            session = data.session;
+            window.location.href = localHomeUrl();
+        }
+        return data;
+    }
+
+    async function sendPasswordReset(email) {
+        await ready;
+        const { error } = await client.auth.resetPasswordForEmail(
+            String(email || "").trim(),
+            { redirectTo: configuredAuthRedirectUrl("reset-password=1") }
+        );
+        if (error) throw error;
+    }
+
+    async function updatePassword(password) {
+        await ready;
+        const { error } = await client.auth.updateUser({
+            password: String(password || "")
+        });
+        if (error) throw error;
+        window.history.replaceState({}, "", localHomeUrl());
+    }
+
+    async function signOut() {
+        await ready;
+        try {
+            await queueSync({ immediate: true });
+        } catch (error) {
+            // The local cache will still be cleared for account privacy.
+        }
+        const { error } = await client.auth.signOut();
+        if (error) throw error;
+        session = null;
+        await clearLocalProjectCache();
+        rawRemove(CLOUD_OWNER_KEY);
+        window.location.href = localHomeUrl();
+    }
+
+    async function deleteAccount() {
+        await ready;
+        if (!session?.user) return;
+        for (const row of cloudRows) {
+            await removeProjectAssets(row.id);
+        }
+        const { error } = await client.rpc("delete_current_user");
+        if (error) throw error;
+        session = null;
+        await clearLocalProjectCache();
+        rawRemove(CLOUD_OWNER_KEY);
+        await client.auth.signOut({ scope: "local" });
+        window.location.href = localHomeUrl();
+    }
+})();

@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="css/base.css">
     <link rel="stylesheet" href="css/home.css">
     <link rel="stylesheet" href="css/theme-responsive.css">
+    <link rel="stylesheet" href="css/auth.css">
 </head>
 <body class="home-body">
     <div class="content home-page">
@@ -167,7 +168,15 @@
         </form>
     </dialog>
 
-    <script src="js/project-whiteboard-storage.js"></script>
-    <script src="js/main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/cloud-sync.js"></script>
+    <script src="js/auth-ui.js"></script>
+    <script>
+        void LocktCloud.bootstrapScripts([
+            "js/project-whiteboard-storage.js",
+            "js/main.js"
+        ]);
+    </script>
 </body>
 </html>

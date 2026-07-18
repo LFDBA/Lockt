@@ -2931,6 +2931,14 @@
                     ...base,
                     src,
                     name: String(item.name || "Imported image"),
+                    assetPath:
+                        typeof item.assetPath === "string"
+                            ? item.assetPath
+                            : "",
+                    assetFingerprint:
+                        typeof item.assetFingerprint === "string"
+                            ? item.assetFingerprint
+                            : "",
                     naturalWidth: Math.max(
                         1,
                         finiteNumber(item.naturalWidth, base.width)
@@ -3054,6 +3062,7 @@
     }
 
     async function writeWhiteboardSnapshot(name, snapshot) {
+        let savedToIndexedDb = false;
         try {
             const database = await openWhiteboardDatabase();
             await runDatabaseRequest(database, "readwrite", (store) =>
@@ -3068,16 +3077,20 @@
             } catch (error) {
                 console.warn("Unable to clear the whiteboard fallback", error);
             }
-            return;
+            savedToIndexedDb = true;
         } catch (error) {
             databasePromise = null;
             console.warn("IndexedDB write failed; using local storage", error);
         }
 
-        window.localStorage.setItem(
-            `${WHITEBOARD_FALLBACK_PREFIX}${name}`,
-            JSON.stringify(snapshot)
-        );
+        if (!savedToIndexedDb) {
+            window.localStorage.setItem(
+                `${WHITEBOARD_FALLBACK_PREFIX}${name}`,
+                JSON.stringify(snapshot)
+            );
+        }
+
+        await window.LocktCloud?.saveWhiteboard(name, snapshot);
     }
 
     async function deleteWhiteboardSnapshot(name) {
@@ -3297,7 +3310,10 @@
             applyBackground();
             syncBackgroundControls();
             renderKanbanTaskTray();
-            void moveWhiteboardSnapshot(previousName, nextName);
+            void Promise.all([
+                moveWhiteboardSnapshot(previousName, nextName),
+                window.LocktCloud?.renameProject(previousName, nextName)
+            ]);
             return true;
         } catch (error) {
             console.warn("Unable to rename project", error);
@@ -3712,6 +3728,7 @@
                 window.sessionStorage.removeItem(NEW_PROJECT_FOCUS_KEY);
             }
             await deleteWhiteboardSnapshot(name);
+            await window.LocktCloud?.deleteProject(name);
         } catch (error) {
             console.warn("Unable to delete project", error);
             dom.confirmDeletion.disabled = false;

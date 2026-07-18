@@ -81,6 +81,8 @@
         } catch (error) {
             console.warn("Unable to move fallback whiteboard data", error);
         }
+
+        await window.LocktCloud?.renameProject(previousName, nextName);
     }
 
     async function remove(projectName) {
@@ -100,6 +102,8 @@
         } catch (error) {
             console.warn("Unable to delete fallback whiteboard data", error);
         }
+
+        await window.LocktCloud?.deleteProject(projectName);
     }
 
     window.LocktWhiteboardStorage = Object.freeze({ move, remove });

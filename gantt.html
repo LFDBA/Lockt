@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/kanban.css"/>
     <link rel="stylesheet" href="css/view-switcher.css"/>
     <link rel="stylesheet" href="css/theme-responsive.css"/>
+    <link rel="stylesheet" href="css/auth.css"/>
 </head>
 <body class="gantt-body">
     <div class="content gantt-page">
@@ -133,9 +134,17 @@
         </form>
     </dialog>
 
-    <script src="js/gantt.js"></script>
-    <script src="js/project-whiteboard-storage.js"></script>
-    <script src="js/gantt-shell.js"></script>
-    <script src="js/view-switcher.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/cloud-sync.js"></script>
+    <script src="js/auth-ui.js"></script>
+    <script>
+        void LocktCloud.bootstrapScripts([
+            "js/gantt.js",
+            "js/project-whiteboard-storage.js",
+            "js/gantt-shell.js",
+            "js/view-switcher.js"
+        ]);
+    </script>
 </body>
 </html>

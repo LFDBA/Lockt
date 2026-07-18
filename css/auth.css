@@ -1,0 +1,346 @@
+.lockt-account-control {
+  position: fixed;
+  z-index: 1450;
+  top: 19px;
+  right: 106px;
+  color: #3b2b23;
+  font-family: "Indie Flower", cursive;
+}
+
+.lockt-account-button {
+  display: inline-flex;
+  min-height: 39px;
+  max-width: 190px;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 2px;
+  overflow: hidden;
+  border: 1px solid rgba(59, 43, 35, 0.18);
+  border-radius: 999px;
+  background: rgba(239, 234, 226, 0.94);
+  color: inherit;
+  box-shadow: 0 4px 12px rgba(59, 43, 35, 0.12);
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+}
+
+.lockt-account-avatar {
+  display: grid;
+  width: 23px;
+  height: 23px;
+  flex: 0 0 23px;
+  place-items: center;
+  border-radius: 50%;
+  background: #9fb4a9;
+  font: 17px/1 system-ui, sans-serif;
+}
+
+.lockt-account-avatar.large {
+  width: 44px;
+  height: 44px;
+  flex-basis: 44px;
+  font-size: 27px;
+}
+
+.lockt-account-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lockt-cloud-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: #9a8d82;
+}
+
+.lockt-cloud-dot[data-state="saved"] { background: #4d8a68; }
+.lockt-cloud-dot[data-state="saving"],
+.lockt-cloud-dot[data-state="loading"] { background: #c28b45; }
+.lockt-cloud-dot[data-state="error"] { background: #c64e47; }
+
+.lockt-account-dialog {
+  width: min(92vw, 430px);
+  max-height: min(88dvh, 680px);
+  padding: 22px;
+  overflow-y: auto;
+  border: 1px solid rgba(59, 43, 35, 0.22);
+  border-radius: 22px;
+  background: #f4f0e9;
+  color: #3b2b23;
+  box-shadow: 0 24px 70px rgba(42, 31, 25, 0.34);
+  font-family: "Indie Flower", cursive;
+}
+
+.lockt-account-dialog::backdrop {
+  background: rgba(40, 31, 25, 0.38);
+  backdrop-filter: blur(4px);
+}
+
+.lockt-account-dialog-header,
+.lockt-account-sync-row,
+.lockt-account-identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.lockt-account-dialog-header h2 {
+  margin: 2px 0 0;
+  font-size: 31px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.lockt-account-kicker,
+.lockt-account-identity span {
+  color: #75675e;
+  font-size: 14px;
+}
+
+.lockt-account-close {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(59, 43, 35, 0.08);
+  color: inherit;
+  cursor: pointer;
+  font: 24px/1 system-ui, sans-serif;
+}
+
+.lockt-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 22px 0 16px;
+  padding: 5px;
+  border-radius: 15px;
+  background: rgba(59, 43, 35, 0.06);
+}
+
+.lockt-auth-tabs button,
+.lockt-auth-primary,
+.lockt-sync-now,
+.lockt-sign-out,
+.lockt-delete-account {
+  min-height: 40px;
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 17px;
+}
+
+.lockt-auth-tabs button {
+  background: transparent;
+  color: inherit;
+}
+
+.lockt-auth-tabs button[aria-selected="true"] {
+  background: #fffdfa;
+  box-shadow: 0 3px 9px rgba(59, 43, 35, 0.1);
+}
+
+.lockt-auth-form {
+  display: grid;
+  gap: 13px;
+}
+
+.lockt-auth-form[hidden],
+.lockt-auth-guest[hidden],
+.lockt-auth-account[hidden],
+.lockt-password-recovery[hidden] {
+  display: none;
+}
+
+.lockt-auth-form label,
+.lockt-account-danger label {
+  display: grid;
+  gap: 5px;
+  color: #66584f;
+  font-size: 15px;
+}
+
+.lockt-auth-form input,
+.lockt-account-danger input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 42px;
+  padding: 7px 11px 4px;
+  border: 1px solid rgba(59, 43, 35, 0.2);
+  border-radius: 11px;
+  outline: 0;
+  background: #fffdfa;
+  color: #3b2b23;
+  font: inherit;
+  font-size: 17px;
+}
+
+.lockt-auth-form input:focus,
+.lockt-account-danger input:focus {
+  border-color: #668a79;
+  box-shadow: 0 0 0 3px rgba(102, 138, 121, 0.16);
+}
+
+.lockt-auth-primary {
+  background: #8fa99d;
+  color: #2f2925;
+  box-shadow: 0 5px 12px rgba(59, 43, 35, 0.13);
+}
+
+.lockt-auth-link {
+  justify-self: center;
+  padding: 4px 8px;
+  border: 0;
+  background: transparent;
+  color: #65584f;
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+}
+
+.lockt-account-identity {
+  justify-content: flex-start;
+  margin: 22px 0 18px;
+}
+
+.lockt-account-identity div {
+  display: grid;
+}
+
+.lockt-account-email {
+  max-width: 285px;
+  overflow: hidden;
+  font-size: 19px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lockt-account-sync-row {
+  padding: 12px;
+  border-radius: 13px;
+  background: rgba(59, 43, 35, 0.055);
+}
+
+.lockt-cloud-status {
+  color: #65584f;
+  font-size: 15px;
+}
+
+.lockt-sync-now {
+  min-height: 34px;
+  padding: 4px 11px 2px;
+  background: #dce7e1;
+  color: inherit;
+  font-size: 15px;
+}
+
+.lockt-sign-out {
+  width: 100%;
+  margin-top: 14px;
+  background: #e3ddd4;
+  color: inherit;
+}
+
+.lockt-account-danger {
+  margin-top: 18px;
+  padding: 11px 13px;
+  border: 1px solid rgba(173, 61, 53, 0.2);
+  border-radius: 13px;
+  color: #8c3731;
+}
+
+.lockt-account-danger summary { cursor: pointer; }
+.lockt-account-danger p { color: #6c5b52; }
+
+.lockt-delete-account {
+  width: 100%;
+  margin-top: 11px;
+  background: #c9544c;
+  color: white;
+}
+
+.lockt-delete-account:disabled,
+.lockt-auth-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.lockt-auth-message {
+  min-height: 22px;
+  margin: 14px 0 0;
+  color: #4e7965;
+  text-align: center;
+}
+
+.lockt-auth-message.is-error { color: #a43f38; }
+
+html[data-theme="dark"] .lockt-account-control,
+html[data-theme="dark"] .lockt-account-dialog {
+  color: #eee6dc;
+}
+
+html[data-theme="dark"] .lockt-account-button,
+html[data-theme="dark"] .lockt-account-dialog {
+  border-color: rgba(255, 255, 255, 0.13);
+  background: #282219;
+}
+
+html[data-theme="dark"] .lockt-auth-tabs,
+html[data-theme="dark"] .lockt-account-sync-row,
+html[data-theme="dark"] .lockt-sign-out {
+  background: rgba(255, 255, 255, 0.08);
+  color: #eee6dc;
+}
+
+html[data-theme="dark"] .lockt-auth-tabs button { color: #eee6dc; }
+html[data-theme="dark"] .lockt-auth-tabs button[aria-selected="true"] { background: #3d342a; }
+html[data-theme="dark"] .lockt-auth-form input,
+html[data-theme="dark"] .lockt-account-danger input {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: #1d1914;
+  color: #eee6dc;
+}
+
+body.is-focus-mode .lockt-account-control {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .lockt-account-control {
+    top: 73px;
+    right: 14px;
+  }
+
+  .home-body .lockt-account-control {
+    top: 18px;
+    right: 72px;
+  }
+
+  .lockt-account-button {
+    min-width: 40px;
+    max-width: 40px;
+    padding: 5px 7px 2px;
+  }
+
+  .lockt-account-label { display: none; }
+  .lockt-cloud-dot {
+    position: absolute;
+    right: 1px;
+    bottom: 1px;
+    box-shadow: 0 0 0 2px #f3f0ea;
+  }
+
+  .lockt-account-dialog {
+    width: calc(100vw - 24px);
+    max-height: calc(100dvh - 24px);
+    padding: 19px;
+    border-radius: 18px;
+  }
+}

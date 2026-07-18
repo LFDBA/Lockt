@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="css/base.css"/>
     <link rel="stylesheet" href="css/view-switcher.css"/>
     <link rel="stylesheet" href="css/theme-responsive.css"/>
+    <link rel="stylesheet" href="css/auth.css"/>
 </head>
 
 <body class="kanban-body">
@@ -199,9 +200,17 @@
         </form>
     </dialog>
 
-    <script src="js/project-whiteboard-storage.js"></script>
-    <script src="js/kanban.js"></script>
-    <script src="js/view-switcher.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="js/supabase-config.js"></script>
+    <script src="js/cloud-sync.js"></script>
+    <script src="js/auth-ui.js"></script>
+    <script>
+        void LocktCloud.bootstrapScripts([
+            "js/project-whiteboard-storage.js",
+            "js/kanban.js",
+            "js/view-switcher.js"
+        ]);
+    </script>
 </body>
 
 </html>
