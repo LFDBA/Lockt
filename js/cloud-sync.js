@@ -10,6 +10,7 @@
     const HOME_INITIALIZED_KEY = "lockt:home-initialized";
     const CLOUD_OWNER_KEY = "lockt:cloud-cache-owner";
     const CLOUD_IDS_KEY = "lockt:cloud-project-ids";
+    const CLOUD_VERSIONS_KEY = "lockt:cloud-project-versions";
     const CLOUD_PENDING_KEY = "lockt:cloud-pending";
     const CLOUD_MIGRATED_PREFIX = "lockt:cloud-migrated:";
     const WHITEBOARD_DATABASE = "lockt-whiteboards";
@@ -29,6 +30,7 @@
     let schemaReady = false;
     let syncTimer = 0;
     let syncPromise = Promise.resolve();
+    let startupSyncPromise = Promise.resolve();
     let cloudRows = [];
     let lastStatus = { state: "local", message: "Saved on this device" };
 
@@ -100,7 +102,20 @@
             return;
         }
 
-        await prepareSignedInStorage();
+        const isWarmStart =
+            rawGet(CLOUD_OWNER_KEY) === session.user.id &&
+            rawGet(PROJECTS_KEY) !== null;
+
+        if (isWarmStart) {
+            setCloudStatus("saved", "Saved in your account");
+            startupSyncPromise = prepareSignedInStorage({ warmStart: true })
+                .catch((startupError) => {
+                    console.warn("Unable to refresh Lockt in the background", startupError);
+                });
+        } else {
+            startupSyncPromise = prepareSignedInStorage();
+            await startupSyncPromise;
+        }
         dispatchAuthChange("INITIAL_SESSION");
 
         document.addEventListener("visibilitychange", () => {
@@ -168,10 +183,12 @@
 
     function installStorageObserver() {
         Storage.prototype.setItem = function setItem(key, value) {
+            const previousValue = this.getItem(key);
             originalSetItem.call(this, key, value);
             if (
                 this === window.localStorage &&
                 !applyingCloudState &&
+                previousValue !== String(value) &&
                 shouldSyncStorageMutation(key, value, false)
             ) {
                 markPendingAndSchedule();
@@ -179,16 +196,19 @@
         };
 
         Storage.prototype.removeItem = function removeItem(key) {
+            const hadValue = this.getItem(key) !== null;
             const shouldSync =
                 this === window.localStorage &&
                 !applyingCloudState &&
+                hadValue &&
                 shouldSyncStorageMutation(key, null, true);
             originalRemoveItem.call(this, key);
             if (shouldSync) markPendingAndSchedule();
         };
 
         Storage.prototype.clear = function clear() {
-            const isLocalStorage = this === window.localStorage;
+            const isLocalStorage =
+                this === window.localStorage && this.length > 0;
             originalClear.call(this);
             if (isLocalStorage && !applyingCloudState) {
                 markPendingAndSchedule();
@@ -197,10 +217,11 @@
     }
 
     function shouldSyncStorageMutation(key, value, removing) {
-        if (!session?.user || !schemaReady) return false;
+        if (!session?.user) return false;
         if (
             key === CLOUD_OWNER_KEY ||
             key === CLOUD_IDS_KEY ||
+            key === CLOUD_VERSIONS_KEY ||
             key === CLOUD_PENDING_KEY ||
             key.startsWith(CLOUD_MIGRATED_PREFIX) ||
             key.startsWith("sb-") ||
@@ -211,12 +232,22 @@
             return false;
         }
         if ([PROJECTS_KEY, METADATA_KEY, SETTINGS_KEY].includes(key)) {
+            if (!schemaReady) {
+                rawSet(CLOUD_PENDING_KEY, "true");
+                return false;
+            }
             return true;
         }
         const idMap = readJson(CLOUD_IDS_KEY, {});
-        if (idMap[key]) return true;
-        if (removing) return getLocalProjectNames().includes(key);
-        return looksLikeBoard(value);
+        const isProjectMutation =
+            Boolean(idMap[key]) ||
+            (removing && getLocalProjectNames().includes(key)) ||
+            looksLikeBoard(value);
+        if (isProjectMutation && !schemaReady) {
+            rawSet(CLOUD_PENDING_KEY, "true");
+            return false;
+        }
+        return isProjectMutation;
     }
 
     function looksLikeBoard(value) {
@@ -238,8 +269,19 @@
     }
 
     function queueSync({ immediate = false } = {}) {
-        if (!session?.user || !schemaReady || applyingCloudState) {
+        if (!session?.user || applyingCloudState) {
             return Promise.resolve();
+        }
+        if (!schemaReady) {
+            if (!immediate) {
+                rawSet(CLOUD_PENDING_KEY, "true");
+                return Promise.resolve();
+            }
+            return startupSyncPromise.then(() => (
+                schemaReady && rawGet(CLOUD_PENDING_KEY) === "true"
+                    ? queueSync({ immediate: true })
+                    : undefined
+            ));
         }
         if (!immediate) {
             markPendingAndSchedule();
@@ -253,7 +295,7 @@
         return syncPromise;
     }
 
-    async function prepareSignedInStorage() {
+    async function prepareSignedInStorage({ warmStart = false } = {}) {
         const userId = session.user.id;
         const previousOwner = rawGet(CLOUD_OWNER_KEY);
         const isReturningOwner = previousOwner === userId;
@@ -265,13 +307,40 @@
             await clearLocalProjectCache();
         }
 
-        setCloudStatus("loading", "Loading your projects…");
+        if (!warmStart) {
+            setCloudStatus("loading", "Loading your projects…");
+        }
         rawSet(CLOUD_OWNER_KEY, userId);
 
         const initialRows = await fetchCloudProjects();
         if (!initialRows) return;
         schemaReady = true;
         cloudRows = initialRows;
+
+        if (warmStart) {
+            if (rawGet(CLOUD_PENDING_KEY) === "true") {
+                await syncAllLocalProjects({ quiet: true });
+                persistCloudVersions(cloudRows);
+                return;
+            }
+            if (cloudRowsMatchLocalVersions(cloudRows)) {
+                setCloudStatus("saved", "Saved in your account");
+                return;
+            }
+            await applyCloudProjects(cloudRows);
+            rawRemove(CLOUD_PENDING_KEY);
+            setCloudStatus("saved", "Updated from your account");
+            window.setTimeout(() => {
+                if (
+                    session?.user?.id === userId &&
+                    document.visibilityState === "visible" &&
+                    rawGet(CLOUD_PENDING_KEY) !== "true"
+                ) {
+                    window.location.reload();
+                }
+            }, 0);
+            return;
+        }
 
         if (isReturningOwner && rawGet(CLOUD_PENDING_KEY) === "true") {
             await syncAllLocalProjects();
@@ -287,6 +356,27 @@
         rawSet(migrationKey, "true");
         rawRemove(CLOUD_PENDING_KEY);
         setCloudStatus("saved", "Saved in your account");
+    }
+
+    function cloudRowsMatchLocalVersions(rows) {
+        const versions = readJson(CLOUD_VERSIONS_KEY, {});
+        const idMap = readJson(CLOUD_IDS_KEY, {});
+        const localNames = getLocalProjectNames();
+        if (rows.length !== localNames.length) return false;
+        return rows.every((row) => (
+            idMap[row.name] === row.id &&
+            Number(versions[row.id]) === Number(row.version)
+        ));
+    }
+
+    function persistCloudVersions(rows) {
+        const versions = {};
+        rows.forEach((row) => {
+            versions[row.id] = Number(row.version) || 1;
+        });
+        applyingCloudState = true;
+        rawSet(CLOUD_VERSIONS_KEY, JSON.stringify(versions));
+        applyingCloudState = false;
     }
 
     async function fetchCloudProjects() {
@@ -415,6 +505,7 @@
             const metadata = {};
             const settings = {};
             const idMap = {};
+            const versions = {};
 
             for (const previousName of previousNames) {
                 if (nameSet.has(previousName)) continue;
@@ -433,6 +524,7 @@
                 };
                 settings[name] = row.localSettings || {};
                 idMap[name] = row.id;
+                versions[row.id] = Number(row.version) || 1;
                 if (row.localWhiteboard) {
                     await writeLocalWhiteboard(name, row.localWhiteboard);
                 } else {
@@ -444,6 +536,7 @@
             rawSet(METADATA_KEY, JSON.stringify(metadata));
             rawSet(SETTINGS_KEY, JSON.stringify(settings));
             rawSet(CLOUD_IDS_KEY, JSON.stringify(idMap));
+            rawSet(CLOUD_VERSIONS_KEY, JSON.stringify(versions));
             rawSet(HOME_INITIALIZED_KEY, "true");
             rawSet(CLOUD_OWNER_KEY, session.user.id);
             const activeName = normalizeName(rawGet(ACTIVE_PROJECT_KEY));
@@ -455,9 +548,11 @@
         }
     }
 
-    async function syncAllLocalProjects() {
+    async function syncAllLocalProjects({ quiet = false } = {}) {
         if (!session?.user || !schemaReady || applyingCloudState) return;
-        setCloudStatus("saving", "Saving to your account…");
+        if (!quiet) {
+            setCloudStatus("saving", "Saving to your account…");
+        }
 
         try {
             const localNames = getLocalProjectNames();
@@ -505,6 +600,11 @@
 
             applyingCloudState = true;
             rawSet(CLOUD_IDS_KEY, JSON.stringify(idMap));
+            const versions = {};
+            cloudRows.forEach((row) => {
+                versions[row.id] = Number(row.version) || 1;
+            });
+            rawSet(CLOUD_VERSIONS_KEY, JSON.stringify(versions));
             rawRemove(CLOUD_PENDING_KEY);
             applyingCloudState = false;
             setCloudStatus("saved", "Saved in your account");
@@ -957,6 +1057,7 @@
                 LEGACY_BOARD_KEY,
                 HOME_INITIALIZED_KEY,
                 CLOUD_IDS_KEY,
+                CLOUD_VERSIONS_KEY,
                 CLOUD_PENDING_KEY
             ].forEach(rawRemove);
             await clearLocalWhiteboards();
@@ -1052,6 +1153,10 @@
 
     async function saveWhiteboard(name, snapshot) {
         await ready;
+        if (session?.user && !schemaReady) {
+            rawSet(CLOUD_PENDING_KEY, "true");
+            await startupSyncPromise;
+        }
         if (!session?.user || !schemaReady || !name || !snapshot) return;
         await queueSync({ immediate: true });
         const idMap = readJson(CLOUD_IDS_KEY, {});
@@ -1079,6 +1184,7 @@
                 whiteboardAssetPaths(data.whiteboard)
             );
             if (row) Object.assign(row, data);
+            persistCloudVersions(cloudRows);
             setCloudStatus("saved", "Saved in your account");
         } catch (error) {
             console.warn("Unable to sync the Whiteboard", error);
@@ -1089,6 +1195,7 @@
 
     async function renameProject(previousName, nextName) {
         await ready;
+        if (session?.user && !schemaReady) await startupSyncPromise;
         if (!session?.user || !schemaReady) return;
         const idMap = readJson(CLOUD_IDS_KEY, {});
         const projectId = idMap[previousName];
@@ -1096,10 +1203,12 @@
             await queueSync({ immediate: true });
             return;
         }
-        const { error } = await client
+        const { data, error } = await client
             .from("projects")
             .update({ name: nextName })
-            .eq("id", projectId);
+            .eq("id", projectId)
+            .select("id,user_id,name,board,whiteboard,settings,created_at,opened_at,updated_at,version")
+            .single();
         if (error) {
             console.warn("Unable to rename the cloud project", error);
             rawSet(CLOUD_PENDING_KEY, "true");
@@ -1111,11 +1220,13 @@
         rawSet(CLOUD_IDS_KEY, JSON.stringify(idMap));
         applyingCloudState = false;
         const row = cloudRows.find((entry) => entry.id === projectId);
-        if (row) row.name = nextName;
+        if (row) Object.assign(row, data);
+        persistCloudVersions(cloudRows);
     }
 
     async function deleteProject(name) {
         await ready;
+        if (session?.user && !schemaReady) await startupSyncPromise;
         if (!session?.user || !schemaReady) return;
         const idMap = readJson(CLOUD_IDS_KEY, {});
         const projectId = idMap[name];
@@ -1131,6 +1242,7 @@
             delete idMap[name];
             rawSet(CLOUD_IDS_KEY, JSON.stringify(idMap));
             applyingCloudState = false;
+            persistCloudVersions(cloudRows);
             setCloudStatus("saved", "Project deleted from your account");
         } catch (error) {
             console.warn("Unable to delete cloud project", error);
