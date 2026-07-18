@@ -79,23 +79,34 @@
             <p class="lockt-auth-message" role="status" aria-live="polite"></p>
         </dialog>
     `;
-    document.body.append(container);
+    const dialog = container.querySelector(".lockt-account-dialog");
+    const homeSlot = document.querySelector(".lockt-home-account-slot");
+    const settingsSlot = document.querySelector(".lockt-account-settings-slot");
+    if (settingsSlot) {
+        container.classList.add("is-settings-entry");
+        settingsSlot.append(container);
+    } else if (homeSlot) {
+        container.classList.add("is-home-entry");
+        homeSlot.append(container);
+    } else {
+        document.body.append(container);
+    }
+    document.body.append(dialog);
 
     const accountButton = container.querySelector(".lockt-account-button");
     const accountLabel = container.querySelector(".lockt-account-label");
     const cloudDot = container.querySelector(".lockt-cloud-dot");
-    const dialog = container.querySelector(".lockt-account-dialog");
-    const closeButton = container.querySelector(".lockt-account-close");
-    const guestPanel = container.querySelector(".lockt-auth-guest");
-    const accountPanel = container.querySelector(".lockt-auth-account");
-    const recoveryPanel = container.querySelector(".lockt-password-recovery");
-    const emailOutput = container.querySelector(".lockt-account-email");
-    const statusOutput = container.querySelector(".lockt-cloud-status");
-    const message = container.querySelector(".lockt-auth-message");
-    const deleteConfirmation = container.querySelector(
+    const closeButton = dialog.querySelector(".lockt-account-close");
+    const guestPanel = dialog.querySelector(".lockt-auth-guest");
+    const accountPanel = dialog.querySelector(".lockt-auth-account");
+    const recoveryPanel = dialog.querySelector(".lockt-password-recovery");
+    const emailOutput = dialog.querySelector(".lockt-account-email");
+    const statusOutput = dialog.querySelector(".lockt-cloud-status");
+    const message = dialog.querySelector(".lockt-auth-message");
+    const deleteConfirmation = dialog.querySelector(
         ".lockt-account-delete-confirmation"
     );
-    const deleteButton = container.querySelector(".lockt-delete-account");
+    const deleteButton = dialog.querySelector(".lockt-delete-account");
 
     accountButton.addEventListener("click", () => dialog.showModal());
     closeButton.addEventListener("click", () => dialog.close());
@@ -103,11 +114,11 @@
         if (event.target === dialog) dialog.close();
     });
 
-    container.querySelectorAll("[data-auth-view]").forEach((button) => {
+    dialog.querySelectorAll("[data-auth-view]").forEach((button) => {
         button.addEventListener("click", () => showAuthView(button.dataset.authView));
     });
 
-    container.querySelector('[data-auth-form="signin"]')
+    dialog.querySelector('[data-auth-form="signin"]')
         .addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -118,7 +129,7 @@
             );
         });
 
-    container.querySelector('[data-auth-form="signup"]')
+    dialog.querySelector('[data-auth-form="signup"]')
         .addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -141,7 +152,7 @@
             );
         });
 
-    container.querySelector('[data-auth-form="reset"]')
+    dialog.querySelector('[data-auth-form="reset"]')
         .addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -155,7 +166,7 @@
             );
         });
 
-    container.querySelector('[data-auth-form="password"]')
+    dialog.querySelector('[data-auth-form="password"]')
         .addEventListener("submit", async (event) => {
             event.preventDefault();
             const data = new FormData(event.currentTarget);
@@ -175,7 +186,7 @@
             );
         });
 
-    container.querySelector(".lockt-sync-now").addEventListener("click", async () => {
+    dialog.querySelector(".lockt-sync-now").addEventListener("click", async () => {
         setMessage("Syncing…");
         try {
             await cloud.flush();
@@ -185,7 +196,7 @@
         }
     });
 
-    container.querySelector(".lockt-sign-out").addEventListener("click", async () => {
+    dialog.querySelector(".lockt-sign-out").addEventListener("click", async () => {
         setMessage("Signing out…");
         try {
             await cloud.signOut();
@@ -256,10 +267,10 @@
         recoveryPanel.hidden = true;
         guestPanel.hidden = false;
         accountPanel.hidden = true;
-        container.querySelectorAll("[data-auth-form]").forEach((form) => {
+        dialog.querySelectorAll("[data-auth-form]").forEach((form) => {
             form.hidden = form.dataset.authForm !== view;
         });
-        container.querySelectorAll('[role="tab"]').forEach((tab) => {
+        dialog.querySelectorAll('[role="tab"]').forEach((tab) => {
             tab.setAttribute("aria-selected", String(tab.dataset.authView === view));
         });
         setMessage("");

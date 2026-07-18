@@ -257,6 +257,9 @@
         const userId = session.user.id;
         const previousOwner = rawGet(CLOUD_OWNER_KEY);
         const isReturningOwner = previousOwner === userId;
+        const migrationKey = `${CLOUD_MIGRATED_PREFIX}${userId}`;
+        const shouldMigrate =
+            !isReturningOwner || rawGet(migrationKey) !== "true";
 
         if (previousOwner && previousOwner !== userId) {
             await clearLocalProjectCache();
@@ -274,14 +277,14 @@
             await syncAllLocalProjects();
             const refreshedRows = await fetchCloudProjects();
             if (refreshedRows) cloudRows = refreshedRows;
-        } else {
+        } else if (shouldMigrate) {
             await migrateLocalProjects(cloudRows);
             const refreshedRows = await fetchCloudProjects();
             if (refreshedRows) cloudRows = refreshedRows;
         }
 
         await applyCloudProjects(cloudRows);
-        rawSet(`${CLOUD_MIGRATED_PREFIX}${userId}`, "true");
+        rawSet(migrationKey, "true");
         rawRemove(CLOUD_PENDING_KEY);
         setCloudStatus("saved", "Saved in your account");
     }
@@ -374,14 +377,37 @@
         applyingCloudState = true;
         try {
             const previousNames = getLocalProjectNames();
+            const cachedSettings = readJson(SETTINGS_KEY, {});
+            const currentProjectName = normalizeName(
+                new URLSearchParams(window.location.search).get("project") ||
+                rawGet(ACTIVE_PROJECT_KEY)
+            );
+            const isHomePage = document.body.classList.contains("home-body");
+            const isWhiteboardPage = document.body.classList.contains(
+                "whiteboard-body"
+            );
             const hydratedRows = await Promise.all(
-                rows.map(async (row) => ({
-                    ...row,
-                    localSettings: await hydrateSettingsFromCloud(row.settings),
-                    localWhiteboard: row.whiteboard
-                        ? await hydrateWhiteboardFromCloud(row.whiteboard)
-                        : null
-                }))
+                rows.map(async (row) => {
+                    const name = normalizeName(row.name);
+                    const cachedWhiteboard = row.whiteboard
+                        ? await readLocalWhiteboard(name)
+                        : null;
+                    return {
+                        ...row,
+                        localSettings: await hydrateSettingsFromCloud(
+                            row.settings,
+                            cachedSettings[name],
+                            isHomePage || name === currentProjectName
+                        ),
+                        localWhiteboard: row.whiteboard
+                            ? await hydrateWhiteboardFromCloud(
+                                row.whiteboard,
+                                cachedWhiteboard,
+                                isWhiteboardPage && name === currentProjectName
+                            )
+                            : null
+                    };
+                })
             );
             const names = hydratedRows.map((row) => normalizeName(row.name))
                 .filter(Boolean);
@@ -599,15 +625,53 @@
         delete settings[dataKey];
     }
 
-    async function hydrateSettingsFromCloud(cloudSettings) {
+    async function hydrateSettingsFromCloud(
+        cloudSettings,
+        cachedSettings = null,
+        downloadMissing = true
+    ) {
         const settings = { ...(cloudSettings || {}) };
-        await hydrateSettingImage(settings, "backgroundImage", "backgroundAssetPath");
-        await hydrateSettingImage(settings, "coverImage", "coverAssetPath");
+        await hydrateSettingImage(
+            settings,
+            "backgroundImage",
+            "backgroundAssetPath",
+            "backgroundAssetFingerprint",
+            cachedSettings,
+            downloadMissing
+        );
+        await hydrateSettingImage(
+            settings,
+            "coverImage",
+            "coverAssetPath",
+            "coverAssetFingerprint",
+            cachedSettings,
+            downloadMissing
+        );
         return settings;
     }
 
-    async function hydrateSettingImage(settings, dataKey, pathKey) {
+    async function hydrateSettingImage(
+        settings,
+        dataKey,
+        pathKey,
+        fingerprintKey,
+        cachedSettings,
+        downloadMissing
+    ) {
         if (!settings[pathKey]) return;
+        const cachedDataUrl = cachedSettings?.[dataKey];
+        const cacheMatches = isImageDataUrl(cachedDataUrl) && (
+            cachedSettings?.[pathKey] === settings[pathKey] ||
+            (
+                settings[fingerprintKey] &&
+                fingerprintDataUrl(cachedDataUrl) === settings[fingerprintKey]
+            )
+        );
+        if (cacheMatches) {
+            settings[dataKey] = cachedDataUrl;
+            return;
+        }
+        if (!downloadMissing) return;
         try {
             settings[dataKey] = await downloadAssetAsDataUrl(settings[pathKey]);
         } catch (error) {
@@ -681,12 +745,35 @@
         );
     }
 
-    async function hydrateWhiteboardFromCloud(snapshot) {
+    async function hydrateWhiteboardFromCloud(
+        snapshot,
+        cachedSnapshot = null,
+        downloadMissing = true
+    ) {
         const localSnapshot = cloneValue(snapshot);
         if (!Array.isArray(localSnapshot?.items)) return localSnapshot;
+        const cachedItems = new Map(
+            Array.isArray(cachedSnapshot?.items)
+                ? cachedSnapshot.items.map((item) => [item?.id, item])
+                : []
+        );
 
         await Promise.all(localSnapshot.items.map(async (item) => {
             if (item?.type !== "image" || !item.assetPath) return;
+            const cachedItem = cachedItems.get(item.id);
+            const cachedSource = cachedItem?.src;
+            const cacheMatches = isImageDataUrl(cachedSource) && (
+                cachedItem.assetPath === item.assetPath ||
+                (
+                    item.assetFingerprint &&
+                    fingerprintDataUrl(cachedSource) === item.assetFingerprint
+                )
+            );
+            if (cacheMatches) {
+                item.src = cachedSource;
+                return;
+            }
+            if (!downloadMissing) return;
             try {
                 item.src = await downloadAssetAsDataUrl(item.assetPath);
             } catch (error) {
