@@ -127,6 +127,7 @@
         interactionCanvas: document.querySelector("#interactionCanvas"),
         worldLayer: document.querySelector("#worldLayer")
     };
+    let currentSaveStatus = "loading";
 
     if (
         !dom.viewport ||
@@ -154,6 +155,7 @@
     let databasePromise = null;
     let autosaveTimer = 0;
     let saveQueue = Promise.resolve();
+    let pendingSaveOperations = 0;
     let rafHandle = 0;
     let inkRafHandle = 0;
     let interactionRafHandle = 0;
@@ -2774,8 +2776,10 @@
         autosaveTimer = 0;
         const snapshot = captureSnapshot();
         const snapshotProjectName = projectName;
+        let saveError = null;
 
         if (!quiet) setSaveState("Saving…", "saving");
+        pendingSaveOperations += 1;
 
         saveQueue = saveQueue
             .catch(() => undefined)
@@ -2783,12 +2787,20 @@
 
         try {
             await saveQueue;
-            if (!quiet && snapshotProjectName === projectName) {
-                setSaveState("Saved", "saved");
-            }
         } catch (error) {
+            saveError = error;
             console.warn("Unable to save the whiteboard", error);
-            if (!quiet) setSaveState("Save failed", "error");
+        } finally {
+            pendingSaveOperations = Math.max(0, pendingSaveOperations - 1);
+            if (
+                pendingSaveOperations === 0 &&
+                snapshotProjectName === projectName
+            ) {
+                setSaveState(
+                    saveError ? "Save failed" : "Saved",
+                    saveError ? "error" : "saved"
+                );
+            }
         }
     }
 
@@ -3123,6 +3135,9 @@
         window.clearTimeout(autosaveTimer);
         autosaveTimer = 0;
         const snapshot = captureSnapshot();
+        let saveError = null;
+        pendingSaveOperations += 1;
+        setSaveState("Saving…", "saving");
         saveQueue = saveQueue
             .catch(() => undefined)
             .then(async () => {
@@ -3131,10 +3146,17 @@
             });
         try {
             await saveQueue;
-            if (projectName === nextName) setSaveState("Saved", "saved");
         } catch (error) {
+            saveError = error;
             console.warn("Unable to move the whiteboard after renaming", error);
-            setSaveState("Rename save failed", "error");
+        } finally {
+            pendingSaveOperations = Math.max(0, pendingSaveOperations - 1);
+            if (pendingSaveOperations === 0 && projectName === nextName) {
+                setSaveState(
+                    saveError ? "Rename save failed" : "Saved",
+                    saveError ? "error" : "saved"
+                );
+            }
         }
     }
 
@@ -3176,43 +3198,61 @@
             }
         });
 
-        dom.backButton?.addEventListener("click", async () => {
-            if (!renameProject(dom.titleInput?.value || "")) return;
-            allowNavigation = true;
-            await persistNow({ quiet: true });
-            window.location.href = "index.html";
+        dom.backButton?.addEventListener("click", () => {
+            navigateFromWhiteboard("index.html");
         });
 
         document.addEventListener(
             "click",
-            async (event) => {
+            (event) => {
                 const link = event.target.closest("a[href]");
                 if (!link || allowNavigation) return;
-                if (!renameProject(dom.titleInput?.value || "")) {
-                    event.preventDefault();
-                    event.stopImmediatePropagation();
-                    return;
-                }
 
                 event.preventDefault();
                 event.stopImmediatePropagation();
-                allowNavigation = true;
-                window.localStorage.setItem(ACTIVE_PROJECT_KEY, projectName);
-                await persistNow({ quiet: true });
-                window.location.href = link.href;
+                navigateFromWhiteboard(link.href);
             },
             true
         );
 
         window.addEventListener("beforeunload", (event) => {
-            if (allowNavigation || renameProject(dom.titleInput?.value || projectName)) {
-                return;
-            }
+            if (allowNavigation) return;
+            const hasInvalidTitle = Boolean(
+                getTitleValidationMessage(dom.titleInput?.value || projectName)
+            );
+            if (!hasInvalidTitle && !isWhiteboardSavePending()) return;
             event.preventDefault();
             event.returnValue = "";
         });
 
         focusNewProjectTitle();
+    }
+
+    function navigateFromWhiteboard(destination) {
+        if (!renameProject(dom.titleInput?.value || "")) return false;
+        if (
+            isWhiteboardSavePending() &&
+            !window.confirm(
+                "This whiteboard is still saving. Leave before it finishes?"
+            )
+        ) {
+            return false;
+        }
+
+        allowNavigation = true;
+        window.localStorage.setItem(ACTIVE_PROJECT_KEY, projectName);
+        window.location.assign(destination);
+        return true;
+    }
+
+    function isWhiteboardSavePending() {
+        return Boolean(
+            autosaveTimer ||
+            pendingSaveOperations > 0 ||
+            state.interaction ||
+            currentSaveStatus === "saving" ||
+            currentSaveStatus === "error"
+        );
     }
 
     function normalizeName(value) {
@@ -3823,6 +3863,7 @@
     }
 
     function setSaveState(label, status) {
+        currentSaveStatus = status;
         if (!dom.saveState) return;
         dom.saveState.textContent = label;
         dom.saveState.dataset.state = status;

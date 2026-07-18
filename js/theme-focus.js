@@ -16,9 +16,7 @@
             console.warn("Unable to read the saved theme", error);
         }
 
-        return window.matchMedia?.("(prefers-color-scheme: dark)").matches
-            ? DARK_THEME
-            : LIGHT_THEME;
+        return LIGHT_THEME;
     }
 
     function setTheme(theme, shouldSave = true) {
