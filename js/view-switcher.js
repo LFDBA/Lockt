@@ -26,7 +26,18 @@
     toggle.setAttribute("aria-expanded", "false");
     chevron.className = "view-switcher-chevron";
     chevron.setAttribute("aria-hidden", "true");
-    chevron.textContent = "⌃";
+    
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("height", "24px");
+    svg.setAttribute("viewBox", "0 -960 960 960");
+    svg.setAttribute("width", "24px");
+    svg.setAttribute("fill", "black");
+    
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", "m280-400 200-200 200 200H280Z");
+    
+    svg.appendChild(path);
+    chevron.appendChild(svg);
     menu.className = "view-switcher-menu";
     menu.setAttribute("aria-label", "Project views");
     menu.hidden = true;
