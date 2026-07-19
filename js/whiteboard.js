@@ -728,6 +728,7 @@
         dom.resetViewButton.addEventListener("click", resetView);
 
         dom.viewport.addEventListener("wheel", handleWheel, { passive: false });
+        dom.viewport.addEventListener("touchmove", handleTouchMove, { passive: false });
         dom.viewport.addEventListener("contextmenu", (event) => event.preventDefault());
         dom.viewport.addEventListener("pointerdown", handlePointerDown);
         dom.viewport.addEventListener("pointermove", handlePointerMove);
@@ -1036,6 +1037,10 @@
             dom.viewport.releasePointerCapture(event.pointerId);
         }
         requestInteractionRender();
+
+        if (event.touches && event.touches.length === 0) {
+            state.lastPinchDistance = null;
+        }
     }
 
     function handleDoubleClick(event) {
@@ -2204,9 +2209,32 @@
         schedulePersist(VIEW_AUTOSAVE_DELAY_MS);
     }
 
+    function handleTouchMove(event) {
+        if (!state.ready || event.touches.length !== 2) return;
+
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        const currentDistance = Math.hypot(
+            touch1.clientX - touch2.clientX,
+            touch1.clientY - touch2.clientY
+        );
+
+        if (!state.lastPinchDistance) {
+            state.lastPinchDistance = currentDistance;
+            return;
+        }
+
+        event.preventDefault();
+        const factor = currentDistance / state.lastPinchDistance;
+        const midX = (touch1.clientX + touch2.clientX) / 2;
+        const midY = (touch1.clientY + touch2.clientY) / 2;
+
+        zoomAtScreenPoint(factor, midX, midY);
+        state.lastPinchDistance = currentDistance;
+    }
+
     function getEffectiveTool(event) {
         if (state.spacePan) return "pan";
-        if (event?.pointerType === "touch" && state.tool === "pen") return "pan";
         return state.tool;
     }
 
