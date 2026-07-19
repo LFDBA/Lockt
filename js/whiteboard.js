@@ -1038,8 +1038,8 @@
         }
         requestInteractionRender();
 
-        if (event.touches && event.touches.length === 0) {
-            state.lastPinchDistance = null;
+        if (event.touches && event.touches.length < 2) {
+            state.pinchBaselineDistance = null;
         }
     }
 
@@ -2219,18 +2219,17 @@
             touch1.clientY - touch2.clientY
         );
 
-        if (!state.lastPinchDistance) {
-            state.lastPinchDistance = currentDistance;
+        if (!state.pinchBaselineDistance) {
+            state.pinchBaselineDistance = currentDistance;
             return;
         }
 
         event.preventDefault();
-        const factor = currentDistance / state.lastPinchDistance;
+        const factor = currentDistance / state.pinchBaselineDistance;
         const midX = (touch1.clientX + touch2.clientX) / 2;
         const midY = (touch1.clientY + touch2.clientY) / 2;
 
         zoomAtScreenPoint(factor, midX, midY);
-        state.lastPinchDistance = currentDistance;
     }
 
     function getEffectiveTool(event) {
