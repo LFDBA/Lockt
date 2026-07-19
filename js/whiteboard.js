@@ -1038,8 +1038,9 @@
         }
         requestInteractionRender();
 
-        if (event.touches && event.touches.length < 2) {
-            state.pinchBaselineDistance = null;
+        if (!event.touches || event.touches.length < 2) {
+            state.pinchStartDistance = null;
+            state.pinchBaseZoom = null;
         }
     }
 
@@ -2219,17 +2220,27 @@
             touch1.clientY - touch2.clientY
         );
 
-        if (!state.pinchBaselineDistance) {
-            state.pinchBaselineDistance = currentDistance;
+        if (!state.pinchStartDistance) {
+            state.pinchStartDistance = currentDistance;
+            state.pinchBaseZoom = state.view.zoom;
             return;
         }
 
         event.preventDefault();
-        const factor = currentDistance / state.pinchBaselineDistance;
+        const factor = currentDistance / state.pinchStartDistance;
+        const nextZoom = clamp(state.pinchBaseZoom * factor, MIN_ZOOM, MAX_ZOOM);
         const midX = (touch1.clientX + touch2.clientX) / 2;
         const midY = (touch1.clientY + touch2.clientY) / 2;
+        const rect = dom.viewport.getBoundingClientRect();
+        const localX = midX - rect.left;
+        const localY = midY - rect.top;
+        const worldPoint = screenToWorld(localX, localY);
 
-        zoomAtScreenPoint(factor, midX, midY);
+        state.view.zoom = nextZoom;
+        state.view.x = localX - worldPoint.x * nextZoom;
+        state.view.y = localY - worldPoint.y * nextZoom;
+        requestRender();
+        updateZoomReadout();
     }
 
     function getEffectiveTool(event) {
