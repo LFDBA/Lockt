@@ -757,6 +757,7 @@
         dom.resetViewButton.addEventListener("click", resetView);
 
         dom.viewport.addEventListener("wheel", handleWheel, { passive: false });
+        dom.viewport.addEventListener("touchmove", handleTouchMove, { passive: false });
         dom.viewport.addEventListener("contextmenu", (event) => event.preventDefault());
         dom.viewport.addEventListener("pointerdown", handlePointerDown);
         dom.viewport.addEventListener("pointermove", handlePointerMove);
@@ -1088,6 +1089,11 @@
             dom.viewport.releasePointerCapture(event.pointerId);
         }
         requestInteractionRender();
+
+        if (!event.touches || event.touches.length < 2) {
+            state.pinchStartDistance = null;
+            state.pinchBaseZoom = null;
+        }
     }
 
     function handleDoubleClick(event) {
@@ -2337,9 +2343,41 @@
         schedulePersist(VIEW_AUTOSAVE_DELAY_MS);
     }
 
+    function handleTouchMove(event) {
+        if (!state.ready || event.touches.length !== 2) return;
+
+        const touch1 = event.touches[0];
+        const touch2 = event.touches[1];
+        const currentDistance = Math.hypot(
+            touch1.clientX - touch2.clientX,
+            touch1.clientY - touch2.clientY
+        );
+
+        if (!state.pinchStartDistance) {
+            state.pinchStartDistance = currentDistance;
+            state.pinchBaseZoom = state.view.zoom;
+            return;
+        }
+
+        event.preventDefault();
+        const factor = currentDistance / state.pinchStartDistance;
+        const nextZoom = clamp(state.pinchBaseZoom * factor, MIN_ZOOM, MAX_ZOOM);
+        const midX = (touch1.clientX + touch2.clientX) / 2;
+        const midY = (touch1.clientY + touch2.clientY) / 2;
+        const rect = dom.viewport.getBoundingClientRect();
+        const localX = midX - rect.left;
+        const localY = midY - rect.top;
+        const worldPoint = screenToWorld(localX, localY);
+
+        state.view.zoom = nextZoom;
+        state.view.x = localX - worldPoint.x * nextZoom;
+        state.view.y = localY - worldPoint.y * nextZoom;
+        requestRender();
+        updateZoomReadout();
+    }
+
     function getEffectiveTool(event) {
         if (state.spacePan) return "pan";
-        if (event?.pointerType === "touch" && state.tool === "pen") return "pan";
         return state.tool;
     }
 

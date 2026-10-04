@@ -101,10 +101,10 @@ function getGanttGroups(boardState) {
     const lists = savedLists.length
         ? savedLists
         : [
-              { title: "To Do", cards: [] },
-              { title: "Doing", cards: [] },
-              { title: "Done", cards: [] }
-          ];
+            { title: "To Do", cards: [] },
+            { title: "Doing", cards: [] },
+            { title: "Done", cards: [] }
+        ];
 
     return lists.map((list, groupIndex) => {
         const cards = Array.isArray(list.cards) ? list.cards : [];
@@ -154,7 +154,7 @@ function getTimelineRange(groups) {
         (paddedLastDate.getTime() -
             startDate.getTime() +
             DAY_IN_MILLISECONDS) /
-            WEEK_IN_MILLISECONDS
+        WEEK_IN_MILLISECONDS
     );
 
     return {
@@ -190,12 +190,10 @@ function scheduleTasks(groups, timelineRange) {
                 effectiveStartDate,
                 startRatio: barStart / timelineRange.weekCount,
                 endRatio: barEnd / timelineRange.weekCount,
-                startPercent: `${
-                    (barStart / timelineRange.weekCount) * 100
-                }%`,
-                spanPercent: `${
-                    (barSpan / timelineRange.weekCount) * 100
-                }%`
+                startPercent: `${(barStart / timelineRange.weekCount) * 100
+                    }%`,
+                spanPercent: `${(barSpan / timelineRange.weekCount) * 100
+                    }%`
             };
         })
     }));
@@ -258,8 +256,8 @@ function setupTimelineScrollers() {
                     event.deltaMode === WheelEvent.DOM_DELTA_LINE
                         ? 18
                         : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-                          ? scroller.clientWidth
-                          : 1;
+                            ? scroller.clientWidth
+                            : 1;
 
                 scroller.scrollLeft += scrollDelta * deltaMultiplier;
             },
@@ -318,7 +316,7 @@ function updateBarTimeframe(bar, task, startDate, endDate, timelineRange) {
         DAY_IN_MILLISECONDS;
     const endDay =
         (endDate.getTime() - timelineRange.startDate.getTime()) /
-            DAY_IN_MILLISECONDS +
+        DAY_IN_MILLISECONDS +
         1;
     const startRatio = startDay / totalDays;
     const endRatio = endDay / totalDays;
@@ -348,8 +346,8 @@ function showTaskDateTooltip(bar, mode, task) {
         mode === "start"
             ? `Starts ${fullDateFormatter.format(task.effectiveStartDate)}`
             : mode === "end"
-              ? `Ends ${fullDateFormatter.format(task.dueDate)}`
-              : `${fullDateFormatter.format(
+                ? `Ends ${fullDateFormatter.format(task.dueDate)}`
+                : `${fullDateFormatter.format(
                     task.effectiveStartDate
                 )} – ${fullDateFormatter.format(task.dueDate)}`;
 }
@@ -510,11 +508,11 @@ function setupTaskDrag(bar, task, projectName, timelineRange) {
         );
         const earliestDayDelta = Math.ceil(
             (timelineRange.startDate.getTime() - initialStartDate.getTime()) /
-                DAY_IN_MILLISECONDS
+            DAY_IN_MILLISECONDS
         );
         const latestDayDelta = Math.floor(
             (timelineEndDate.getTime() - initialEndDate.getTime()) /
-                DAY_IN_MILLISECONDS
+            DAY_IN_MILLISECONDS
         );
 
         bar.classList.add("is-dragging");
@@ -525,8 +523,8 @@ function setupTaskDrag(bar, task, projectName, timelineRange) {
             const bounds = timeline.getBoundingClientRect();
             const rawDayDelta = Math.round(
                 ((moveEvent.clientX - initialPointerX) / bounds.width) *
-                    timelineRange.weekCount *
-                    7
+                timelineRange.weekCount *
+                7
             );
             const dayDelta = Math.max(
                 earliestDayDelta,
@@ -585,7 +583,7 @@ function setupTaskDrag(bar, task, projectName, timelineRange) {
         );
         const appliedDayDelta = Math.round(
             (nextStartDate.getTime() - task.effectiveStartDate.getTime()) /
-                DAY_IN_MILLISECONDS
+            DAY_IN_MILLISECONDS
         );
         const nextEndDate = addDays(task.dueDate, appliedDayDelta);
         const timelineEndDate = addDays(
