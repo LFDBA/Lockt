@@ -67,6 +67,9 @@
     const MAX_ZOOM = 12;
     const MAX_ITEM_SIZE = 7200;
     const MAX_UNDO_STEPS = 150;
+    const MIN_TEXT_ITEM_HEIGHT = 42;
+    const MIN_TEXT_FONT_SIZE = 16;
+    const MAX_TEXT_FONT_SIZE = 72;
     const HIGHLIGHTER_SIZE_MULTIPLIER = 2.4;
     const HIGHLIGHTER_MIN_SIZE = 8;
     const STROKE_INDEX_CELL_SIZE = 2048;
@@ -114,6 +117,7 @@
         kanbanTaskDropMessage: document.querySelector("#kanbanTaskDropMessage"),
         strokeSize: document.querySelector("#strokeSize"),
         strokeSizeReadout: document.querySelector("#strokeSizeReadout"),
+        sizeControlLabel: document.querySelector("#sizeControlLabel"),
         undoButton: document.querySelector("#undoButton"),
         zoomOutButton: document.querySelector("#zoomOutButton"),
         zoomInButton: document.querySelector("#zoomInButton"),
@@ -169,6 +173,7 @@
         tool: "pen",
         activeColor: INK_PALETTE[0],
         strokeSize: 4,
+        textFontSize: 27,
         highlighterColor: HIGHLIGHTER_PALETTE[0],
         highlighterOpacity: 0.12,
         stickyColor: STICKY_PALETTE[0].id,
@@ -703,7 +708,31 @@
         });
 
         dom.strokeSize.addEventListener("input", () => {
-            state.strokeSize = clamp(Number(dom.strokeSize.value), 1, 24);
+            const value = Number(dom.strokeSize.value);
+            const selectedTextItem = state.tool === "select"
+                ? getSelectedTextItem()
+                : null;
+            if (usesTextSizeControl()) {
+                state.textFontSize = clamp(
+                    value,
+                    MIN_TEXT_FONT_SIZE,
+                    MAX_TEXT_FONT_SIZE
+                );
+                if (selectedTextItem) {
+                    selectedTextItem.fontSize = state.textFontSize;
+                    const itemNode = getItemNode(selectedTextItem.id);
+                    itemNode?.style.setProperty(
+                        "--text-item-font-size",
+                        `${selectedTextItem.fontSize}px`
+                    );
+                    const field = itemNode?.querySelector("[data-text-body]");
+                    if (field instanceof HTMLTextAreaElement) {
+                        resizeTextItemToContent(selectedTextItem, field);
+                    }
+                }
+            } else {
+                state.strokeSize = clamp(value, 1, 24);
+            }
             updateToolbar();
             schedulePersist();
         });
@@ -835,7 +864,7 @@
             const textItemId = createTextAt(point.x - 140, point.y - 72);
             setTool("select");
             focusTextItem(textItemId);
-            setStatus("Text box added. Start typing.");
+            setStatus("Text added. Start typing.");
             return;
         }
 
@@ -843,15 +872,17 @@
             state.interaction = {
                 type: "erase",
                 pointerId: event.pointerId,
-                removedStrokes: []
+                removedStrokes: [],
+                removedItems: []
             };
-            eraseAt(point.x, point.y, state.interaction.removedStrokes);
+            eraseAt(point.x, point.y, state.interaction);
             return;
         }
 
         if (activeTool === "select") {
             state.selectedItemId = null;
             syncSelectionState();
+            updateToolbar();
             return;
         }
 
@@ -935,8 +966,24 @@
 
         if (interaction.type === "erase") {
             const point = clientToWorld(event.clientX, event.clientY);
-            eraseAt(point.x, point.y, interaction.removedStrokes);
+            eraseAt(point.x, point.y, interaction);
             return;
+        }
+
+        if (interaction.type === "pending-text-drag") {
+            const distance = Math.hypot(
+                event.clientX - interaction.startClientX,
+                event.clientY - interaction.startClientY
+            );
+            if (distance < 5) return;
+
+            if (document.activeElement instanceof HTMLTextAreaElement) {
+                document.activeElement.blur();
+            }
+            dom.viewport.setPointerCapture(event.pointerId);
+            interaction.type = "drag-item";
+            setStatus("Moving text.");
+            event.preventDefault();
         }
 
         if (interaction.type === "drag-item") {
@@ -952,6 +999,9 @@
         if (interaction.type === "resize-item") {
             const item = getItemById(interaction.itemId);
             if (!item) return;
+            if (item.type === "text") {
+                item.autoHeight = false;
+            }
             const point = clientToWorld(event.clientX, event.clientY);
             item.width = clamp(
                 interaction.itemWidth + point.x - interaction.startWorldX,
@@ -966,7 +1016,7 @@
                         ? 170
                         : item.type === "image"
                             ? 164
-                            : 120,
+                            : MIN_TEXT_ITEM_HEIGHT,
                 MAX_ITEM_SIZE
             );
             updateItemElement(item);
@@ -1005,11 +1055,13 @@
                 requestInkRender();
             } else if (
                 interaction.type === "erase" &&
-                interaction.removedStrokes.length
+                (interaction.removedStrokes.length ||
+                    interaction.removedItems.length)
             ) {
                 pushHistoryAction({
-                    type: "erase-strokes",
-                    removed: interaction.removedStrokes
+                    type: "erase-content",
+                    removedStrokes: interaction.removedStrokes,
+                    removedItems: interaction.removedItems
                 });
             } else if (
                 (interaction.type === "drag-item" ||
@@ -1039,6 +1091,8 @@
     }
 
     function handleDoubleClick(event) {
+        if (event.target.matches("[data-text-body]")) return;
+
         const itemNode = event.target.closest(".board-item");
         const item = getItemById(itemNode?.dataset.id);
         if (!item) return;
@@ -1076,6 +1130,27 @@
 
         state.selectedItemId = itemId;
         syncSelectionState();
+        updateToolbar();
+
+        if (
+            item.type === "text" &&
+            event.target.matches("[data-text-body]")
+        ) {
+            const point = clientToWorld(event.clientX, event.clientY);
+            state.interaction = {
+                type: "pending-text-drag",
+                pointerId: event.pointerId,
+                itemId,
+                startClientX: event.clientX,
+                startClientY: event.clientY,
+                startWorldX: point.x,
+                startWorldY: point.y,
+                itemX: item.x,
+                itemY: item.y,
+                beforeBounds: getItemBounds(item)
+            };
+            return;
+        }
 
         if (event.target.closest("[data-delete-item]")) {
             removeItem(itemId);
@@ -1085,6 +1160,7 @@
         const point = clientToWorld(event.clientX, event.clientY);
 
         if (event.target.closest("[data-resize-handle]")) {
+            const beforeBounds = getItemBounds(item);
             dom.viewport.setPointerCapture(event.pointerId);
             state.interaction = {
                 type: "resize-item",
@@ -1094,9 +1170,9 @@
                 startWorldY: point.y,
                 itemWidth: item.width,
                 itemHeight: item.height,
-                beforeBounds: getItemBounds(item)
+                beforeBounds
             };
-            setStatus("Resizing card.");
+            setStatus(item.type === "text" ? "Resizing text field." : "Resizing card.");
             return;
         }
 
@@ -1135,8 +1211,7 @@
             event.target.matches("[data-text-body]")
         ) {
             item.text = event.target.value;
-            const titleNode = itemNode.querySelector(".topbar-title");
-            if (titleNode) titleNode.textContent = getTextItemLabel(item.text);
+            resizeTextItemToContent(item, event.target);
         }
 
         schedulePersist();
@@ -1146,6 +1221,7 @@
         if (event.target.closest(".board-item")) return;
         state.selectedItemId = null;
         syncSelectionState();
+        updateToolbar();
     }
 
     function handleWorldFocusIn(event) {
@@ -1261,15 +1337,15 @@
         updateToolbar();
 
         const messages = {
-            select: "Select, move, resize, or edit cards.",
+            select: "Select, move, or edit items.",
             pen: "Pen ready.",
             line: "Drag between two points to draw a line.",
             rectangle: "Drag between opposite corners.",
             circle: "Drag outward from the circle centre.",
             ellipse: "Drag between opposite corners.",
-            text: "Click the board to place a text box.",
+            text: "Choose a font size, then click the board to add text.",
             highlighter: "Highlighter ready.",
-            eraser: "Drag over ink to erase it. Right-click also erases.",
+            eraser: "Drag over ink or text to erase it. Right-click also erases.",
             note: "Click the board to place a sticky note.",
             pan: "Drag to pan the whiteboard."
         };
@@ -1303,9 +1379,23 @@
                 );
             });
 
-        dom.strokeSize.value = String(state.strokeSize);
-        dom.strokeSizeReadout.value = String(state.strokeSize);
-        dom.strokeSizeReadout.textContent = String(state.strokeSize);
+        const selectedTextItem = state.tool === "select"
+            ? getSelectedTextItem()
+            : null;
+        const textSizeControl = usesTextSizeControl();
+        const sizeValue = textSizeControl
+            ? selectedTextItem?.fontSize || state.textFontSize
+            : state.strokeSize;
+        dom.strokeSize.min = textSizeControl ? String(MIN_TEXT_FONT_SIZE) : "1";
+        dom.strokeSize.max = textSizeControl ? String(MAX_TEXT_FONT_SIZE) : "24";
+        dom.strokeSize.value = String(sizeValue);
+        dom.strokeSizeReadout.value = String(sizeValue);
+        dom.strokeSizeReadout.textContent = String(sizeValue);
+        if (dom.sizeControlLabel) {
+            dom.sizeControlLabel.textContent = textSizeControl
+                ? "Font size"
+                : "Size";
+        }
         dom.highlighterOpacity.value = String(state.highlighterOpacity);
         const opacityLabel = `${Math.round(state.highlighterOpacity * 100)}%`;
         dom.highlighterOpacityReadout.value = opacityLabel;
@@ -1316,6 +1406,18 @@
         dom.viewport.dataset.tool = activeTool;
         updateZoomReadout();
         updateUndoButton();
+    }
+
+    function getSelectedTextItem() {
+        const item = getItemById(state.selectedItemId);
+        return item?.type === "text" ? item : null;
+    }
+
+    function usesTextSizeControl() {
+        return (
+            state.tool === "text" ||
+            (state.tool === "select" && Boolean(getSelectedTextItem()))
+        );
     }
 
     function updateZoomReadout() {
@@ -2080,7 +2182,35 @@
         );
     }
 
-    function eraseAt(x, y, removedStrokes = null) {
+    function eraseAt(x, y, erasedContent = null) {
+        let textItemIndex = -1;
+        for (let index = state.items.length - 1; index >= 0; index -= 1) {
+            const item = state.items[index];
+            if (
+                item.type === "text" &&
+                x >= item.x &&
+                x <= item.x + item.width &&
+                y >= item.y &&
+                y <= item.y + item.height
+            ) {
+                textItemIndex = index;
+                break;
+            }
+        }
+        if (textItemIndex >= 0) {
+            const [item] = state.items.splice(textItemIndex, 1);
+            if (state.selectedItemId === item.id) {
+                state.selectedItemId = null;
+            }
+            erasedContent?.removedItems.push({
+                index: textItemIndex,
+                item: cloneItem(item)
+            });
+            renderBoardItems();
+            updateToolbar();
+            return;
+        }
+
         const threshold = 18 / state.view.zoom;
         const nearbyStrokes = getVisibleStrokes({
             minX: x - threshold,
@@ -2098,8 +2228,11 @@
 
         const [stroke] = state.strokes.splice(index, 1);
         removeStrokeFromSpatialIndex(stroke);
-        if (removedStrokes) {
-            removedStrokes.push({ index, stroke: cloneStroke(stroke) });
+        if (erasedContent) {
+            erasedContent.removedStrokes.push({
+                index,
+                stroke: cloneStroke(stroke)
+            });
         }
         requestInkRender();
     }
@@ -2280,10 +2413,11 @@
             x,
             y,
             width: 280,
-            height: 144,
+            height: Math.ceil(state.textFontSize * 1.3 + 16),
             text: "",
             color: state.activeColor,
-            fontSize: 27
+            fontSize: state.textFontSize,
+            autoHeight: true
         };
         state.items.push(textItem);
         state.selectedItemId = textItem.id;
@@ -2509,25 +2643,29 @@
                 );
                 element.style.setProperty(
                     "--text-item-font-size",
-                    `${clamp(item.fontSize || 27, 16, 72)}px`
+                    `${clamp(
+                        item.fontSize || state.textFontSize,
+                        MIN_TEXT_FONT_SIZE,
+                        MAX_TEXT_FONT_SIZE
+                    )}px`
                 );
                 element.innerHTML = `
-                    <div class="item-topbar" data-drag-handle>
-                        <div class="topbar-meta">
-                            <span class="topbar-chip">Text</span>
-                            <span class="topbar-title">${escapeHtml(getTextItemLabel(item.text))}</span>
-                        </div>
-                        <button type="button" class="item-delete" data-delete-item aria-label="Delete text">×</button>
-                    </div>
                     <div class="text-card-content">
-                        <textarea class="text-body" data-text-body placeholder="Type here…" aria-label="Text box">${escapeHtml(item.text || "")}</textarea>
+                        <textarea class="text-body" data-text-body rows="1" placeholder="Type here…" aria-label="Whiteboard text">${escapeHtml(item.text || "")}</textarea>
                     </div>
-                    <button type="button" class="resize-handle" data-resize-handle aria-label="Resize text"></button>
+                    <button type="button" class="resize-handle text-resize-handle" data-resize-handle aria-label="Resize text field"></button>
                 `;
             }
             fragment.append(element);
         });
         dom.worldLayer.append(fragment);
+        state.items.forEach((item) => {
+            if (item.type !== "text") return;
+            const field = getItemNode(item.id)?.querySelector("[data-text-body]");
+            if (field instanceof HTMLTextAreaElement) {
+                resizeTextItemToContent(item, field);
+            }
+        });
         syncSelectionState();
         syncKanbanTaskPlacementCounts();
     }
@@ -2538,7 +2676,32 @@
         node.style.transform = `translate(${item.x}px, ${item.y}px)`;
         node.style.width = `${item.width}px`;
         node.style.height = `${item.height}px`;
+        if (item.type === "text") {
+            node.dataset.autoHeight = item.autoHeight === false ? "false" : "true";
+        }
         node.classList.toggle("selected", item.id === state.selectedItemId);
+    }
+
+    function resizeTextItemToContent(item, field) {
+        if (item?.type !== "text" || !(field instanceof HTMLTextAreaElement)) {
+            return;
+        }
+        if (item.autoHeight === false) {
+            field.style.height = "100%";
+            updateItemElement(item);
+            return;
+        }
+        field.style.height = "0px";
+        item.height = clamp(
+            Math.max(
+                Math.ceil((item.fontSize || state.textFontSize) * 1.3 + 16),
+                field.scrollHeight + 16
+            ),
+            MIN_TEXT_ITEM_HEIGHT,
+            MAX_ITEM_SIZE
+        );
+        field.style.height = "100%";
+        updateItemElement(item);
     }
 
     function syncSelectionState() {
@@ -2559,6 +2722,7 @@
             index: removal.index
         });
         renderBoardItems();
+        updateToolbar();
         setStatus("Card removed. Ctrl+Z restores it.");
     }
 
@@ -2641,17 +2805,34 @@
         if (action.type === "add-stroke") {
             removeStrokeById(action.strokeId);
             requestInkRender();
-        } else if (action.type === "erase-strokes") {
-            for (let index = action.removed.length - 1; index >= 0; index -= 1) {
-                const removed = action.removed[index];
+        } else if (action.type === "erase-content") {
+            for (
+                let index = action.removedStrokes.length - 1;
+                index >= 0;
+                index -= 1
+            ) {
+                const removed = action.removedStrokes[index];
                 state.strokes.splice(
                     clamp(removed.index, 0, state.strokes.length),
                     0,
                     cloneStroke(removed.stroke)
                 );
             }
+            for (
+                let index = action.removedItems.length - 1;
+                index >= 0;
+                index -= 1
+            ) {
+                const removed = action.removedItems[index];
+                state.items.splice(
+                    clamp(removed.index, 0, state.items.length),
+                    0,
+                    cloneItem(removed.item)
+                );
+            }
             invalidateStrokeSpatialIndex();
             requestInkRender();
+            if (action.removedItems.length) renderBoardItems();
         } else if (action.type === "add-item") {
             if (removeItemFromState(action.itemId)) renderBoardItems();
         } else if (action.type === "remove-item") {
@@ -2687,6 +2868,7 @@
         }
 
         schedulePersist();
+        updateToolbar();
         setStatus("Last whiteboard change undone.");
     }
 
@@ -2701,12 +2883,16 @@
     }
 
     function getItemBounds(item) {
-        return {
+        const bounds = {
             x: item.x,
             y: item.y,
             width: item.width,
             height: item.height
         };
+        if (item.type === "text") {
+            bounds.autoHeight = item.autoHeight !== false;
+        }
+        return bounds;
     }
 
     function hasItemBoundsChanged(item, beforeBounds) {
@@ -2716,7 +2902,9 @@
             (item.x !== beforeBounds.x ||
                 item.y !== beforeBounds.y ||
                 item.width !== beforeBounds.width ||
-                item.height !== beforeBounds.height)
+                item.height !== beforeBounds.height ||
+                (item.type === "text" &&
+                    item.autoHeight !== beforeBounds.autoHeight))
         );
     }
 
@@ -2736,11 +2924,6 @@
             STICKY_PALETTE.find((entry) => entry.id === colourId) ||
             STICKY_PALETTE[0]
         );
-    }
-
-    function getTextItemLabel(text) {
-        const preview = String(text || "").replace(/\s+/g, " ").trim();
-        return preview || "Typed text";
     }
 
     function focusNoteItem(itemId) {
@@ -2811,6 +2994,7 @@
             tool: state.tool,
             activeColor: state.activeColor,
             strokeSize: state.strokeSize,
+            textFontSize: state.textFontSize,
             highlighterColor: state.highlighterColor,
             highlighterOpacity: state.highlighterOpacity,
             stickyColor: state.stickyColor,
@@ -2833,6 +3017,11 @@
             state.activeColor = snapshot.activeColor;
         }
         state.strokeSize = clamp(finiteNumber(snapshot.strokeSize, 4), 1, 24);
+        state.textFontSize = clamp(
+            finiteNumber(snapshot.textFontSize, 27),
+            MIN_TEXT_FONT_SIZE,
+            MAX_TEXT_FONT_SIZE
+        );
         if (isCssColour(snapshot.highlighterColor)) {
             state.highlighterColor = snapshot.highlighterColor;
         }
@@ -2931,7 +3120,7 @@
                             ? 170
                             : item.type === "image"
                                 ? 164
-                                : 120,
+                                : MIN_TEXT_ITEM_HEIGHT,
                     MAX_ITEM_SIZE
                 )
             };
@@ -3008,7 +3197,12 @@
                 ...base,
                 text: String(item.text || ""),
                 color: isCssColour(item.color) ? item.color : INK_PALETTE[0],
-                fontSize: clamp(finiteNumber(item.fontSize, 27), 16, 72)
+                fontSize: clamp(
+                    finiteNumber(item.fontSize, 27),
+                    MIN_TEXT_FONT_SIZE,
+                    MAX_TEXT_FONT_SIZE
+                ),
+                autoHeight: item.autoHeight !== false
             }];
         });
     }
