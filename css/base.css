@@ -18,6 +18,9 @@ body {
 
 .top-bar {
   display: flex;
+  position: sticky;
+  left: 5vw;
+  width: 90vw;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 40px;
